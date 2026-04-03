@@ -193,7 +193,7 @@
   .navbar-heading {
     display: block;
   }
-  @include media-breakpoint-up(xl) {
+  @include media-breakpoint-up(sm) {
     &:hover {
       max-width: $navbar-vertical-open-width;
     }
@@ -253,7 +253,7 @@
   }
 }
 // Media fixes for iPhone 5 like resolutions
-@include media-breakpoint-down(xl) {
+@include media-breakpoint-down(sm) {
   .g-sidenav-show {
     &.rtl {
       .sidenav {
@@ -464,7 +464,7 @@
     }
   }
 }
-@include media-breakpoint-up(xl) {
+@include media-breakpoint-up(sm) {
   .g-sidenav-hidden {
     &.rtl .main-content {
       margin-right: $navbar-vertical-hidden-width !important;
@@ -555,85 +555,6 @@
           opacity: 0;
           width: 0;
           height: 0;
-        }
-      }
-      // Hover style on sidenav minimized
-      &:hover {
-        max-width: $navbar-vertical-open-width !important;
-
-        &.fixed-start ~ .main-content {
-          margin-left: $navbar-vertical-open-width + 1.5;
-        }
-
-        .navbar-brand {
-          span {
-            opacity: 1;
-          }
-        }
-
-        .nav-item {
-          .nav-link {
-            .nav-link-text,
-            .sidenav-normal {
-              opacity: 1;
-              width: auto;
-            }
-
-            .sidenav-mini-icon {
-              opacity: 0;
-              width: 0;
-              min-width: 0;
-            }
-
-            &[data-bs-toggle="collapse"]:after {
-              content: "\f107";
-            }
-          }
-
-          .collapse {
-            .nav {
-              margin-left: 1.5rem !important;
-              padding-left: 1rem !important;
-
-              .nav-item {
-                .nav-link {
-                  margin-left: $navbar-vertical-collapse-margin-left;
-
-                  &:before {
-                    content: "";
-                  }
-                }
-
-                .collapse,
-                .collapsing {
-                  .nav {
-                    margin-left: 0 !important;
-                    padding-left: 0 !important;
-
-                    .nav-item {
-                      .nav-link {
-                        &:before {
-                          content: none;
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        .card.card-background {
-          .icon-shape {
-            margin-bottom: 1rem !important;
-          }
-
-          .docs-info {
-            opacity: 1;
-            width: auto;
-            height: auto;
-          }
         }
       }
     }

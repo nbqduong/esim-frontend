@@ -67,24 +67,9 @@
       </li>
     </ul>
   </div>
-  <div class="pt-3 mx-3 mt-3 sidenav-footer">
-    <sidenav-card
-      :class="cardBg"
-      textPrimary="Need Help?"
-      textSecondary="Please check our docs"
-      route="https://www.creative-tim.com/learning-lab/vue/overview/soft-ui-dashboard/"
-      label="Documentation"
-      icon="ni ni-diamond"
-    />
-    <a
-      class="btn bg-gradient-success mt-4 w-100"
-      href="https://www.creative-tim.com/product/vue-soft-ui-dashboard-pro?ref=vsud"
-      type="button"
-      >Upgrade to pro</a
-    >
-  </div>
 </template>
 <script lang="ts">
+import { computed } from "vue";
 import SidenavCollapse from "./SidenavCollapse.vue";
 import SidenavCard from "./SidenavCard.vue";
 import Shop from "../../assets/Icon/Shop.vue";
@@ -100,6 +85,10 @@ export default {
   name: "SidenavList",
   props: {
     cardBg: String,
+    isMiniSidebar: {
+      type: Boolean,
+      default: false
+    }
   },
   data() {
     return {
@@ -119,6 +108,11 @@ export default {
     Document,
     Spaceship,
     Settings,
+  },
+  provide() {
+    return {
+      isMiniSidebar: computed(() => this.isMiniSidebar)
+    };
   },
   methods: {
     getRoute() {
