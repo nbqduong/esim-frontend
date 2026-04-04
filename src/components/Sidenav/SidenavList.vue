@@ -5,63 +5,45 @@
   >
     <ul class="navbar-nav">
       <li class="nav-item">
-        <sidenav-collapse navText="Dashboard" :to="{ name: 'Dashboard' }">
+        <sidenav-collapse navText="Home" :to="{ name: 'Home' }">
           <template #icon>
             <shop />
           </template>
         </sidenav-collapse>
       </li>
       <li class="nav-item">
-        <sidenav-collapse navText="Tables" :to="{ name: 'Tables' }">
+        <sidenav-collapse navText="Project" :to="{ name: 'Project' }">
           <template #icon>
             <office />
           </template>
         </sidenav-collapse>
       </li>
       <li class="nav-item">
-        <sidenav-collapse navText="Billing" :to="{ name: 'Billing' }">
-          <template #icon>
-            <credit-card />
-          </template>
-        </sidenav-collapse>
-      </li>
-
-      <li class="nav-item">
-        <sidenav-collapse
-          navText="Virtual Reality"
-          :to="{ name: 'Virtual Reality' }"
-        >
-          <template #icon>
-            <box3d />
-          </template>
-        </sidenav-collapse>
-      </li>
-      <li class="mt-3 nav-item">
-        <h6
-          class="text-xs ps-4 text-uppercase font-weight-bolder opacity-6"
-          :class="'ms-2'"
-        >
-          PAGES
-        </h6>
-      </li>
-      <li class="nav-item">
-        <sidenav-collapse navText="Profile" :to="{ name: 'Profile' }">
-          <template #icon>
-            <customer-support />
-          </template>
-        </sidenav-collapse>
-      </li>
-      <li class="nav-item">
-        <sidenav-collapse navText="Sign In" :to="{ name: 'Sign In' }">
+        <sidenav-collapse navText="Template" :to="{ name: 'Template' }">
           <template #icon>
             <document />
           </template>
         </sidenav-collapse>
       </li>
+
       <li class="nav-item">
-        <sidenav-collapse navText="Sign Up" :to="{ name: 'Sign Up' }">
+        <sidenav-collapse navText="Documents" :to="{ name: 'Documents' }">
           <template #icon>
-            <spaceship />
+            <getting-started />
+          </template>
+        </sidenav-collapse>
+      </li>
+      <li class="nav-item">
+        <sidenav-collapse navText="Pricing" :to="{ name: 'Pricing' }">
+          <template #icon>
+            <credit-card />
+          </template>
+        </sidenav-collapse>
+      </li>
+      <li class="nav-item">
+        <sidenav-collapse navText="Settings" :to="{ name: 'User Settings' }">
+          <template #icon>
+            <settings />
           </template>
         </sidenav-collapse>
       </li>
@@ -75,9 +57,9 @@ import SidenavCard from "./SidenavCard.vue";
 import Shop from "../../assets/Icon/Shop.vue";
 import Office from "../../assets/Icon/Office.vue";
 import CreditCard from "../../assets/Icon/CreditCard.vue";
-import Box3d from "../../assets/Icon/Box3d.vue";
 import CustomerSupport from "../../assets/Icon/CustomerSupport.vue";
 import Document from "../../assets/Icon/Document.vue";
+import GettingStarted from "../../assets/Icon/GettingStarted.vue";
 import Spaceship from "../../assets/Icon/Spaceship.vue";
 import Settings from "../../assets/Icon/Settings.vue";
 
@@ -103,9 +85,9 @@ export default {
     Shop,
     Office,
     CreditCard,
-    Box3d,
     CustomerSupport,
     Document,
+    GettingStarted,
     Spaceship,
     Settings,
   },

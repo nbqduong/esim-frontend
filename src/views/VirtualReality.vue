@@ -5,6 +5,6 @@
   </div>
 </template>
 
-<script lang="ts">
-export default { name: "VirtualReality" };
+<script setup lang="ts">
+defineOptions({ name: "VirtualReality" });
 </script>

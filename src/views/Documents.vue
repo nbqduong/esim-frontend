@@ -1,14 +1,15 @@
 <template>
   <div class="container">
     <h2>
-      Billing
+      Document
     </h2>
     <p>
-      Billing page content goes here.
+      User guilde, define later
     </p>
   </div>
 </template>
 
+
 <script setup lang="ts">
-defineOptions({ name: "Billing" });
+
 </script>

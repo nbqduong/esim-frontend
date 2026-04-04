@@ -5,6 +5,6 @@
   </div>
 </template>
 
-<script lang="ts">
-export default { name: "Profile" };
+<script setup lang="ts">
+defineOptions({ name: "Profile" });
 </script>

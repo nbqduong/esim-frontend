@@ -1,14 +1,12 @@
 <template>
   <div class="container">
     <h2>
-      Billing
+      Pricing
     </h2>
     <p>
-      Billing page content goes here.
+      Define later
     </p>
   </div>
 </template>
-
 <script setup lang="ts">
-defineOptions({ name: "Billing" });
 </script>

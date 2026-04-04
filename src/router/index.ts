@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
-import Dashboard from "@/views/Dashboard.vue";
-import Tables from "@/views/Tables.vue";
-import Billing from "@/views/Billing.vue";
-import VirtualReality from "@/views/VirtualReality.vue";
-import Profile from "@/views/Profile.vue";
+import Home from "@/views/Home.vue";
+import Project from "@/views/Project.vue";
+import Template from "@/views/Template.vue";
+import Documents from "@/views/Documents.vue";
+import Pricing from "@/views/Pricing.vue";
+import UserSettings from "@/views/UserSettings.vue";
 import SignIn from "@/views/SignIn.vue";
 import SignUp from "@/views/SignUp.vue";
 
@@ -11,32 +12,53 @@ const routes = [
   {
     path: "/",
     name: "/",
-    redirect: "/dashboard",
+    redirect: "/home",
   },
   {
-    path: "/dashboard",
-    name: "Dashboard",
-    component: Dashboard,
+    path: "/home",
+    name: "Home",
+    component: Home,
+  },
+  {
+    path: "/project",
+    name: "Project",
+    component: Project,
+  },
+  {
+    path: "/template",
+    name: "Template",
+    component: Template,
+  },
+  {
+    path: "/documents",
+    name: "Documents",
+    component: Documents,
+  },
+  {
+    path: "/pricing",
+    name: "Pricing",
+    component: Pricing,
+  },
+  {
+    path: "/user-settings",
+    name: "User Settings",
+    component: UserSettings,
   },
   {
     path: "/tables",
-    name: "Tables",
-    component: Tables,
+    redirect: { name: "Project" },
   },
   {
     path: "/billing",
-    name: "Billing",
-    component: Billing,
+    redirect: { name: "Pricing" },
   },
   {
     path: "/virtual-reality",
-    name: "Virtual Reality",
-    component: VirtualReality,
+    redirect: { name: "Template" },
   },
   {
     path: "/profile",
-    name: "Profile",
-    component: Profile,
+    redirect: { name: "User Settings" },
   },
   {
     path: "/sign-in",
