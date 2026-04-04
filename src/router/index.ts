@@ -5,8 +5,7 @@ import Template from "@/views/Template.vue";
 import Documents from "@/views/Documents.vue";
 import Pricing from "@/views/Pricing.vue";
 import UserSettings from "@/views/UserSettings.vue";
-import SignIn from "@/views/SignIn.vue";
-import SignUp from "@/views/SignUp.vue";
+
 
 const routes = [
   {
@@ -53,25 +52,11 @@ const routes = [
     redirect: { name: "Pricing" },
   },
   {
-    path: "/virtual-reality",
-    redirect: { name: "Template" },
-  },
-  {
     path: "/profile",
     redirect: { name: "User Settings" },
   },
-  {
-    path: "/sign-in",
-    name: "Sign In",
-    component: SignIn,
-  },
-  {
-    path: "/sign-up",
-    name: "Sign Up",
-    component: SignUp,
-  },
-];
 
+]
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,

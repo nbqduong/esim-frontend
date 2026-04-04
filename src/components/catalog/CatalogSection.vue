@@ -11,13 +11,7 @@
       />
     </div>
 
-    <div v-else class="card border-0 shadow-sm border-radius-xl">
-      <div class="card-body p-4">
-        <p class="text-sm text-secondary mb-0">
-          {{ section.emptyText ?? "No matching items yet." }}
-        </p>
-      </div>
-    </div>
+
   </section>
 </template>
 

@@ -1,0 +1,35 @@
+name: Build and Deploy to GitHub Pages Subdirectory
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use the Node version required by your project
+
+      - name: Install dependencies and Build
+        run: |
+          npm install
+          npm run build
+
+
+      - name: Deploy to Target Repository
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.DEPLOY_TOKEN }}
+          external_repository: nbqduong/nbqduong.github.io
+          publish_branch: main 
+          publish_dir: ./dist
+          destination_dir: demoui
+          keep_files: true
