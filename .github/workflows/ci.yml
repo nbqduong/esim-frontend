@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Use the Node version required by your project
+          node-version: '22'
 
       - name: Install dependencies and Build
         run: |
