@@ -16,6 +16,14 @@ export default defineConfig({
     preprocessorOptions: {
       scss: {
         loadPaths: ['node_modules'],
+        quietDeps: true,
+        silenceDeprecations: [
+          'import',
+          'global-builtin',
+          'color-functions',
+          'function-units',
+          'if-function',
+        ],
       },
     },
   },
