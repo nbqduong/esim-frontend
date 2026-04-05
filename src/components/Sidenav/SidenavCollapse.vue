@@ -1,7 +1,7 @@
 <template>
   <router-link class="nav-link" :to="to" v-bind="$attrs">
     <div
-      class="text-center bg-white shadow icon icon-shape icon-sm border-radius-md d-flex align-items-center justify-content-center"
+      class="text-center icon d-flex align-items-center justify-content-center sidenav-collapse__icon"
       :class="'me-2'"
     >
       <slot name="icon"></slot>
@@ -42,3 +42,28 @@ export default {
   },
 };
 </script>
+<style scoped>
+.sidenav-collapse__icon {
+  color: #64748b;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0.5rem;
+  transition:
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.nav-link:hover .sidenav-collapse__icon {
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.nav-link.active .sidenav-collapse__icon {
+  color: #0f172a;
+  background: transparent !important;
+}
+
+.nav-link.active .sidenav-collapse__icon :deep(svg) {
+  color: inherit;
+}
+</style>

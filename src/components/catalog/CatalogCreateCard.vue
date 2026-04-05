@@ -35,7 +35,7 @@ withDefaults(
     label?: string;
   }>(),
   {
-    heading: "Create a Project",
+    heading: "",
     label: "New Project",
   },
 );
