@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Home from "@/views/Home.vue";
 import Project from "@/views/Project.vue";
+import ProjectCreate from "@/views/ProjectCreate.vue";
 import Template from "@/views/Template.vue";
 import Documents from "@/views/Documents.vue";
 import Pricing from "@/views/Pricing.vue";
@@ -17,6 +18,14 @@ const routes = [
     path: "/home",
     name: "Home",
     component: Home,
+  },
+  {
+    path: "/project/create",
+    name: "Project Create",
+    component: ProjectCreate,
+    meta: {
+      layout: "standalone",
+    },
   },
   {
     path: "/project",

@@ -1,5 +1,5 @@
 <template>
-  <article class="card border-0 h-100 catalog-card">
+  <article class="card border-0 catalog-card catalog-card-size">
     <div class="card-body p-0 d-flex flex-column catalog-card__body">
       <div class="catalog-card__preview-shell">
         <div class="catalog-card__preview-page">
@@ -34,9 +34,9 @@ defineProps<{
 </script>
 
 <style scoped>
+@import "./catalog-card-size.css";
+
 .catalog-card {
-  width: min(100%, 16rem);
-  height: 16rem;
   border-radius: 1.25rem;
   background: transparent;
   box-shadow: none;
@@ -121,11 +121,6 @@ defineProps<{
 }
 
 @media (max-width: 575.98px) {
-  .catalog-card {
-    width: min(100%, 14rem);
-    height: 14rem;
-  }
-
   .catalog-card__preview-shell {
     flex-basis: 9rem;
     min-height: 9rem;

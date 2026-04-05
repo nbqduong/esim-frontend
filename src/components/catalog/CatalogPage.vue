@@ -13,6 +13,12 @@
       </div>
     </div>
 
+    <div v-if="$slots.lead" class="row mb-4">
+      <div class="col-12">
+        <slot name="lead" />
+      </div>
+    </div>
+
     <div v-if="query && !hasResults" class="row mb-4">
       <div class="col-12">
         <div class="card border-0 shadow-sm border-radius-xl">

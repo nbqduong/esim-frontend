@@ -1,10 +1,15 @@
 <template>
-  <CatalogPage :sections="sections" />
+  <CatalogPage :sections="sections">
+    <template #lead>
+      <CatalogCreateCard />
+    </template>
+  </CatalogPage>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 
+import CatalogCreateCard from "@/components/catalog/CatalogCreateCard.vue";
 import CatalogPage from "@/components/catalog/CatalogPage.vue";
 import type { CatalogSection } from "@/components/catalog/types";
 

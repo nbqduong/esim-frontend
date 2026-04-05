@@ -1,6 +1,7 @@
 <template>
-  <!-- Dynamically bind the hidden class based on a Vue state variable -->
+  <router-view v-if="isStandaloneLayout" />
   <div
+    v-else
     class="g-sidenav-show app-layout"
     :class="{ 'g-sidenav-hidden': isMiniSidebar }"
   >
@@ -20,11 +21,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from "vue";
+import { useRoute } from "vue-router";
+
 import SideNav from "./components/Sidenav/index.vue";
 
 // false = Full Sidebar, true = Just Icons
-const isMiniSidebar = ref(false); 
+const isMiniSidebar = ref(false);
+const route = useRoute();
+const isStandaloneLayout = computed(() => route.meta.layout === "standalone");
 
 function toggleSidebar() {
   isMiniSidebar.value = !isMiniSidebar.value;
@@ -56,7 +61,7 @@ function toggleSidebar() {
 .main-content {
   height: 100%;
   min-height: 0;
-  padding-left: 0.75rem;
+  padding-left: 0.25rem;
 }
 
 .main-content__surface {
