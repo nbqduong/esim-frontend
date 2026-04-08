@@ -11,6 +11,16 @@
           <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Default Avatar" class="rounded-circle" style="width: 80px; height: 80px;">
         </div>
         <h5 class="mb-1">{{ userEmail }}</h5>
+        
+        <div class="my-4 p-3 bg-light rounded text-start">
+          <h4 class="mb-3 text-center">My Balance: ${{ (userBalance / 100).toFixed(2) }}</h4>
+          <div class="d-flex justify-content-center gap-2">
+            <button class="btn btn-success" @click="topup(1000)" :disabled="balanceLoading">+ $10.00</button>
+            <button class="btn btn-warning" @click="topup(5000)" :disabled="balanceLoading">+ $50.00</button>
+            <button class="btn btn-danger" @click="deduct(500)" :disabled="balanceLoading">- $5.00</button>
+          </div>
+        </div>
+
         <div>
           <button class="btn btn-outline-danger" @click="logout">Logout</button>
         </div>
@@ -31,7 +41,9 @@ import { ref, onMounted } from 'vue';
 
 const isAuthenticated = ref(false);
 const loading = ref(true);
+const balanceLoading = ref(false);
 const userEmail = ref("");
+const userBalance = ref(0);
 
 // Automatically detect the backend URL based on where the UI is being served.
 const backendBaseUrl = window.location.port === "5173" 
@@ -43,6 +55,13 @@ onMounted(async () => {
     const response = await fetch(`${backendBaseUrl}/auth/me`);
     if (response.ok) {
       const data = await response.json();
+      
+      const profileRes = await fetch(`${backendBaseUrl}/api/users/me`);
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        userBalance.value = profile.balance;
+      }
+      
       isAuthenticated.value = true;
       userEmail.value = data.email;
     } else {
@@ -57,6 +76,46 @@ onMounted(async () => {
 
 const loginWithGoogle = () => {
   window.location.href = `${backendBaseUrl}/auth/google/login`;
+};
+
+const topup = async (amountCents: number) => {
+  balanceLoading.value = true;
+  try {
+    const res = await fetch(`${backendBaseUrl}/api/users/me/balance/topup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount_cents: amountCents })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      userBalance.value = data.new_balance_cents;
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    balanceLoading.value = false;
+  }
+};
+
+const deduct = async (amountCents: number) => {
+  balanceLoading.value = true;
+  try {
+    const res = await fetch(`${backendBaseUrl}/api/users/me/balance/deduct`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount_cents: amountCents })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      userBalance.value = data.new_balance_cents;
+    } else {
+      alert("Insufficient funds to perform this action.");
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    balanceLoading.value = false;
+  }
 };
 
 const logout = async () => {
