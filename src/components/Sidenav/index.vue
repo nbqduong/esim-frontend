@@ -23,11 +23,15 @@
     </div>
     <hr class="horizontal dark mt-0" />
     <SidenavList :isMiniSidebar="isMiniSidebar" />
+    <div class="sidenav-footer position-absolute w-100 bottom-0">
+      <UserButton :isMiniSidebar="isMiniSidebar" />
+    </div>
   </aside>
 </template>
 <script setup lang="ts">
 import SidebarToggle from "../../assets/Icon/SidebarToggle.vue";
 import SidenavList from "./SidenavList.vue";
+import UserButton from "./UserButton.vue";
 
 const { customClass = "", isMiniSidebar = false } = defineProps<{
   customClass?: string;

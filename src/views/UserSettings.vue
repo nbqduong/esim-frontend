@@ -8,7 +8,7 @@
       
       <div v-else-if="isAuthenticated">
         <div class="mb-3">
-          <img src="https://ui-avatars.com/api/?name=User&background=random" alt="Default Avatar" class="rounded-circle" style="width: 80px; height: 80px;">
+          <img :src="avatarUrl" alt="User Avatar" class="rounded-circle" style="width: 80px; height: 80px;">
         </div>
         <h5 class="mb-1">{{ userEmail }}</h5>
         
@@ -43,6 +43,7 @@ const isAuthenticated = ref(false);
 const loading = ref(true);
 const balanceLoading = ref(false);
 const userEmail = ref("");
+const avatarUrl = ref("https://ui-avatars.com/api/?name=U&background=random");
 const userBalance = ref(0);
 
 // Automatically detect the backend URL based on where the UI is being served.
@@ -64,6 +65,7 @@ onMounted(async () => {
       
       isAuthenticated.value = true;
       userEmail.value = data.email;
+      avatarUrl.value = `https://ui-avatars.com/api/?name=${encodeURIComponent(data.email)}&background=random`;
     } else {
       isAuthenticated.value = false;
     }
