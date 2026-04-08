@@ -42,3 +42,18 @@ const emit = defineEmits<{
   (e: "toggle-sidebar"): void;
 }>();
 </script>
+
+<style scoped>
+.sidenav-toggler.sidenav-toggler--mini, .sidenav-toggler.sidenav-toggler--mini:active, .sidenav-toggler.sidenav-toggler--mini:focus {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #4293f5 !important;
+}
+
+.sidenav-toggler, .sidenav-toggler:active, .sidenav-toggler:focus {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #344767 !important;
+}
+</style>

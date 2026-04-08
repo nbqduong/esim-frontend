@@ -11,7 +11,7 @@
     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
       <path
         d="M 4.5 9 A 3.5 3.5 0 0 1 8 5.5 L 14.5 5.5 L 14.5 26.5 L 8 26.5 A 3.5 3.5 0 0 1 4.5 23 Z"
-        :fill="active ? '#ffffff' : 'currentColor'"
+        fill="currentColor"
       />
 
       <rect
@@ -20,7 +20,7 @@
         width="23"
         height="21"
         rx="4"
-        :stroke="active ? '#ffffff' : 'currentColor'"
+        stroke="currentColor"
         stroke-width="2.2"
       />
     </g>
