@@ -38,6 +38,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { backendUrl } from '@/lib/backend';
 
 const isAuthenticated = ref(false);
 const loading = ref(true);
@@ -46,18 +47,17 @@ const userEmail = ref("");
 const avatarUrl = ref("https://ui-avatars.com/api/?name=U&background=random");
 const userBalance = ref(0);
 
-// Automatically detect the backend URL based on where the UI is being served.
-const backendBaseUrl = window.location.port === "5173" 
-  ? `http://${window.location.hostname}:8000` 
-  : window.location.origin;
-
 onMounted(async () => {
   try {
-    const response = await fetch(`${backendBaseUrl}/auth/me`);
+    const response = await fetch(backendUrl('/auth/me'), {
+      credentials: "include",
+    });
     if (response.ok) {
       const data = await response.json();
       
-      const profileRes = await fetch(`${backendBaseUrl}/api/users/me`);
+      const profileRes = await fetch(backendUrl('/api/users/me'), {
+        credentials: "include",
+      });
       if (profileRes.ok) {
         const profile = await profileRes.json();
         userBalance.value = profile.balance;
@@ -77,15 +77,16 @@ onMounted(async () => {
 });
 
 const loginWithGoogle = () => {
-  window.location.href = `${backendBaseUrl}/auth/google/login`;
+  window.location.href = backendUrl('/auth/google/login');
 };
 
 const topup = async (amountCents: number) => {
   balanceLoading.value = true;
   try {
-    const res = await fetch(`${backendBaseUrl}/api/users/me/balance/topup`, {
+    const res = await fetch(backendUrl('/api/users/me/balance/topup'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ amount_cents: amountCents })
     });
     if (res.ok) {
@@ -102,9 +103,10 @@ const topup = async (amountCents: number) => {
 const deduct = async (amountCents: number) => {
   balanceLoading.value = true;
   try {
-    const res = await fetch(`${backendBaseUrl}/api/users/me/balance/deduct`, {
+    const res = await fetch(backendUrl('/api/users/me/balance/deduct'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ amount_cents: amountCents })
     });
     if (res.ok) {
@@ -123,7 +125,10 @@ const deduct = async (amountCents: number) => {
 const logout = async () => {
   loading.value = true;
   try {
-    await fetch(`${backendBaseUrl}/auth/logout`, { method: "POST" });
+    await fetch(backendUrl('/auth/logout'), {
+      method: "POST",
+      credentials: "include",
+    });
   } catch (error) {
     console.error("Logout failed", error);
   }

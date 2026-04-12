@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { backendUrl } from '@/lib/backend';
 
 defineProps<{
   isMiniSidebar: boolean;
@@ -39,13 +40,11 @@ const isAuthenticated = ref(false);
 const userEmail = ref("");
 const avatarUrl = ref("https://ui-avatars.com/api/?name=U&background=random");
 
-const backendBaseUrl = window.location.port === "5173" 
-  ? `http://${window.location.hostname}:8000` 
-  : window.location.origin;
-
 onMounted(async () => {
   try {
-    const response = await fetch(`${backendBaseUrl}/auth/me`);
+    const response = await fetch(backendUrl('/auth/me'), {
+      credentials: "include",
+    });
     if (response.ok) {
       const data = await response.json();
       isAuthenticated.value = true;
@@ -60,7 +59,7 @@ onMounted(async () => {
 });
 
 const loginWithGoogle = () => {
-  window.location.href = `${backendBaseUrl}/auth/google/login`;
+  window.location.href = backendUrl('/auth/google/login');
 };
 
 const goToSettings = () => {

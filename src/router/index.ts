@@ -53,6 +53,11 @@ const routes = [
     component: UserSettings,
   },
   {
+    path: "/not-authorized",
+    name: "Not Authorized",
+    redirect: { name: "Home" },
+  },
+  {
     path: "/tables",
     redirect: { name: "Project" },
   },
