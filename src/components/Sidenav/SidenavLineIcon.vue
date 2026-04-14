@@ -39,6 +39,13 @@
       <path d="M6.5 14.5h3.5" />
     </template>
 
+    <template v-else-if="name === 'community'">
+      <path d="M8.5 10.25a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />
+      <path d="M15.75 11.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5Z" />
+      <path d="M5.25 17.75v-.5A3.75 3.75 0 0 1 9 13.5h1a3.75 3.75 0 0 1 3.75 3.75v.5" />
+      <path d="M14.25 17.75v-.5a3 3 0 0 1 3-3h.5a3 3 0 0 1 3 3v.5" />
+    </template>
+
     <template v-else-if="name === 'settings'">
       <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
       <path d="M18.25 12a6.53 6.53 0 0 0-.11-1.17l1.69-1.31-1.5-2.6-2.03.58a6.88 6.88 0 0 0-2.02-1.17L14 3.75h-3l-.28 2.58a6.88 6.88 0 0 0-2.02 1.17l-2.03-.58-1.5 2.6 1.69 1.31a6.53 6.53 0 0 0 0 2.34l-1.69 1.31 1.5 2.6 2.03-.58c.6.49 1.29.89 2.02 1.17L11 20.25h3l.28-2.58a6.88 6.88 0 0 0 2.02-1.17l2.03.58 1.5-2.6-1.69-1.31c.07-.38.11-.77.11-1.17Z" />
@@ -50,7 +57,7 @@
 defineOptions({ name: "SidenavLineIcon" });
 
 defineProps<{
-  name: "home" | "project" | "template" | "documents" | "pricing" | "settings";
+  name: "home" | "project" | "template" | "documents" | "pricing" | "community" | "settings";
 }>();
 </script>
 

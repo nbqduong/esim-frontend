@@ -41,6 +41,13 @@
         </sidenav-collapse>
       </li>
       <li class="nav-item">
+        <sidenav-collapse navText="Community" :to="{ name: 'Community' }">
+          <template #icon>
+            <sidenav-line-icon name="community" />
+          </template>
+        </sidenav-collapse>
+      </li>
+      <li class="nav-item">
         <sidenav-collapse navText="Settings" :to="{ name: 'User Settings' }">
           <template #icon>
             <sidenav-line-icon name="settings" />

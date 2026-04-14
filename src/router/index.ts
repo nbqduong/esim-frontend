@@ -5,6 +5,7 @@ import ProjectCreate from "@/views/ProjectCreate.vue";
 import Template from "@/views/Template.vue";
 import Documents from "@/views/Documents.vue";
 import Pricing from "@/views/Pricing.vue";
+import Community from "@/views/Community.vue";
 import UserSettings from "@/views/UserSettings.vue";
 
 
@@ -46,6 +47,11 @@ const routes = [
     path: "/pricing",
     name: "Pricing",
     component: Pricing,
+  },
+  {
+    path: "/community",
+    name: "Community",
+    component: Community,
   },
   {
     path: "/user-settings",
