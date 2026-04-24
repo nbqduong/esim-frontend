@@ -5,7 +5,7 @@
     <div v-if="section.items.length" class="d-flex flex-wrap gap-6 mb-4">
       <CatalogCard
         v-for="item in section.items"
-        :key="item.title"
+        :key="item.id ?? item.title"
         :item="item"
         class="flex-shrink-0"
       />

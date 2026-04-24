@@ -20,6 +20,25 @@
           placeholder="Document title"
         />
       </div>
+
+      <div class="project-create__topbar-actions">
+        <span class="project-create__cloud-note">
+          {{ cloudStatusLabel }}
+        </span>
+        <button
+          class="project-create__save-button"
+          type="button"
+          :disabled="isSaveToDriveDisabled"
+          @click="handleSaveToDrive"
+        >
+          <span
+            class="project-create__save-icon"
+            aria-hidden="true"
+            v-html="iconMarkup('cloud-upload')"
+          ></span>
+          <span>{{ saveButtonLabel }}</span>
+        </button>
+      </div>
     </header>
 
     <div class="project-create__layout">
@@ -103,27 +122,49 @@
         <span>{{ editorReady ? "READY" : "LOADING" }}</span>
       </div>
       <div class="project-create__status-item">
+        {{ draftSaveLabel }}
+      </div>
+      <div class="project-create__status-item">
         Ln {{ editorSnapshot.currentLine }}, Col {{ editorSnapshot.currentColumn }}
       </div>
       <div class="project-create__status-item">
         {{ editorSnapshot.charCount }} chars
       </div>
-      <div class="project-create__status-item">UTF-8</div>
+      <div class="project-create__status-item">{{ cloudStatusLabel }}</div>
       <div class="project-create__status-item project-create__status-item--right">
-        DOM EDITOR HOST V1
+        {{ projectReferenceLabel }}
       </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
+import {
+  canUseProjectDraftStorage,
+  createEmptyProjectDraft,
+  deleteProjectDraft,
+  getProjectDraftId,
+  loadProjectDraft,
+  saveProjectDraft,
+  type ProjectDraftRecord,
+  type ProjectDraftSyncState,
+} from "@/data/project-loader";
 import type {
   EditorHandle,
   EditorSnapshot,
 } from "@/features/project-create/editor/editor-host";
 import { mountEditor } from "@/features/project-create/editor/editor-host";
+import { buildProjectArchive, parseProjectArchive } from "@/lib/project-content";
+import {
+  completeProjectSaveToDrive,
+  downloadProjectArchive,
+  prepareProjectSaveToDrive,
+  syncProject,
+  uploadProjectArchive,
+} from "@/lib/projects";
 
 defineOptions({ name: "ProjectCreate" });
 
@@ -133,8 +174,19 @@ type ActivityItem = {
   label: string;
 };
 
+type CloudSaveState = "error" | "idle" | "saving" | "synced";
+type DraftSaveState = "error" | "idle" | "saved" | "saving" | "unsupported";
+
 function iconMarkup(name: string) {
   switch (name) {
+    case "cloud-upload":
+      return `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M7.25 18.25h9a3.5 3.5 0 0 0 .2-7 5 5 0 0 0-9.75-1.35A3.75 3.75 0 0 0 7.25 18.25Z" />
+          <path d="M12 9.75v7" />
+          <path d="m9.5 12.25 2.5-2.5 2.5 2.5" />
+        </svg>
+      `;
     case "explorer":
       return `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -189,42 +241,6 @@ function iconMarkup(name: string) {
           <path d="M12 4.5v1.75M12 17.75V19.5M19.5 12h-1.75M6.25 12H4.5M17.3 6.7l-1.2 1.2M7.9 16.1l-1.2 1.2M17.3 17.3l-1.2-1.2M7.9 7.9 6.7 6.7" />
         </svg>
       `;
-    case "folder":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3.75 7.25h6l1.5 1.5h8a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H4.75a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z" />
-        </svg>
-      `;
-    case "folder-open":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3.75 7.25h6l1.5 1.5h8a1 1 0 0 1 .95 1.3l-1.8 6a1 1 0 0 1-.95.7H5.2a1 1 0 0 1-.96-.74l-1.44-6a1 1 0 0 1 .95-1.26Z" />
-        </svg>
-      `;
-    case "file":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7.75 4.5h6.2l3.3 3.3v10.45a1 1 0 0 1-1 1H7.75a1 1 0 0 1-1-1v-12.75a1 1 0 0 1 1-1Z" />
-          <path d="M13.75 4.75v3.5h3.5" />
-        </svg>
-      `;
-    case "file-code":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7.75 4.5h6.2l3.3 3.3v10.45a1 1 0 0 1-1 1H7.75a1 1 0 0 1-1-1v-12.75a1 1 0 0 1 1-1Z" />
-          <path d="M13.75 4.75v3.5h3.5" />
-          <path d="m10 12-1.75 1.75L10 15.5" />
-          <path d="m14 12 1.75 1.75L14 15.5" />
-        </svg>
-      `;
-    case "file-config":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7.75 4.5h6.2l3.3 3.3v10.45a1 1 0 0 1-1 1H7.75a1 1 0 0 1-1-1v-12.75a1 1 0 0 1 1-1Z" />
-          <path d="M13.75 4.75v3.5h3.5" />
-          <path d="M9.25 14h5.5M9.25 17h5.5M9.25 11h2.5" />
-        </svg>
-      `;
     default:
       return "";
   }
@@ -251,29 +267,478 @@ const defaultSnapshot: EditorSnapshot = {
   lineCount: 1,
 };
 
-const title = ref("Untitled");
+const route = useRoute();
+const router = useRouter();
+const routeProjectId = computed(() =>
+  typeof route.params.projectId === "string" ? route.params.projectId : null,
+);
+
+const title = ref("");
 const editorHostElement = ref<HTMLElement | null>(null);
 const editorHandle = ref<EditorHandle | null>(null);
 const editorReady = ref(false);
 const editorSnapshot = ref<EditorSnapshot>(defaultSnapshot);
 const selectedActivity = ref("explorer");
+const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjectId.value));
+const draftStorageEnabled = canUseProjectDraftStorage();
+const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
+const cloudSaveState = ref<CloudSaveState>("idle");
+const draftSaveLabel = computed(() => {
+  switch (draftSaveState.value) {
+    case "saving":
+      return "AUTOSAVE SAVING";
+    case "saved":
+      return "AUTOSAVE SAVED";
+    case "error":
+      return "AUTOSAVE ERROR";
+    case "unsupported":
+      return "AUTOSAVE OFF";
+    default:
+      return "AUTOSAVE IDLE";
+  }
+});
+const projectReferenceLabel = computed(() => {
+  const activeProjectId = routeProjectId.value ?? currentDraft.value.projectId;
+  return activeProjectId ? `PROJECT ${activeProjectId.slice(0, 8)}` : "LOCAL DRAFT";
+});
 
-onMounted(() => {
+const DRAFT_SAVE_DEBOUNCE_MS = 400;
+
+let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let draftSaveQueue: Promise<void> = Promise.resolve();
+let isComponentDisposed = false;
+let isHydratingDraft = false;
+let hasSeenInitialEditorSnapshot = false;
+let latestEditorContent = "";
+let latestDraftSaveVersion = 0;
+
+function getEffectiveTitle(candidate: string): string {
+  const trimmed = candidate.trim();
+  return trimmed || "Untitled";
+}
+
+function isBlankDraft(titleValue: string, content: string): boolean {
+  return titleValue.trim().length === 0 && content.trim().length === 0;
+}
+
+function isDraftDirty(
+  draft: Pick<
+    ProjectDraftRecord,
+    "content" | "lastSyncedChecksum" | "lastSyncedTitle" | "localChecksum" | "title"
+  >,
+): boolean {
+  if (draft.lastSyncedTitle === null && draft.lastSyncedChecksum === null) {
+    return !isBlankDraft(draft.title, draft.content);
+  }
+
+  if (draft.lastSyncedChecksum === null) {
+    return getEffectiveTitle(draft.title) !== (draft.lastSyncedTitle ?? "") || draft.content.length > 0;
+  }
+
+  return (
+    draft.localChecksum !== draft.lastSyncedChecksum ||
+    getEffectiveTitle(draft.title) !== (draft.lastSyncedTitle ?? "")
+  );
+}
+
+function getDraftSyncState(draft: ProjectDraftRecord): ProjectDraftSyncState {
+  if (!isDraftDirty(draft) && draft.projectId === null && isBlankDraft(draft.title, draft.content)) {
+    return "idle";
+  }
+
+  return isDraftDirty(draft) ? "dirty" : "synced";
+}
+
+const hasPendingLocalChanges = computed(
+  () => latestEditorContent !== currentDraft.value.content || title.value !== currentDraft.value.title,
+);
+
+const hasUnsyncedCloudChanges = computed(() => {
+  if (hasPendingLocalChanges.value) {
+    if (
+      currentDraft.value.lastSyncedTitle === null &&
+      currentDraft.value.lastSyncedChecksum === null
+    ) {
+      return !isBlankDraft(title.value, latestEditorContent);
+    }
+    return true;
+  }
+
+  return isDraftDirty(currentDraft.value);
+});
+
+const cloudStatusLabel = computed(() => {
+  if (cloudSaveState.value === "saving") {
+    return "DRIVE SAVING";
+  }
+  if (cloudSaveState.value === "error") {
+    return "DRIVE ERROR";
+  }
+  if (hasUnsyncedCloudChanges.value) {
+    return "LOCAL CHANGES";
+  }
+  if (routeProjectId.value ?? currentDraft.value.projectId) {
+    return "DRIVE SYNCED";
+  }
+  return "LOCAL ONLY";
+});
+
+const saveButtonLabel = computed(() => {
+  if (cloudSaveState.value === "saving") {
+    return "Saving...";
+  }
+  if (cloudSaveState.value === "error") {
+    return "Retry Save";
+  }
+  return "Save to Drive";
+});
+
+const isSaveToDriveDisabled = computed(
+  () => !editorReady.value || cloudSaveState.value === "saving",
+);
+
+async function buildPersistedDraft(
+  content: string,
+  titleValue: string,
+): Promise<ProjectDraftRecord> {
+  const archive = await buildProjectArchive(content);
+  const nextDraft: ProjectDraftRecord = {
+    ...currentDraft.value,
+    content,
+    id: getProjectDraftId(routeProjectId.value ?? currentDraft.value.projectId),
+    localChecksum: archive.checksum,
+    projectId: routeProjectId.value ?? currentDraft.value.projectId,
+    syncState: "idle",
+    title: titleValue,
+    updatedAt: Date.now(),
+  };
+  nextDraft.syncState = getDraftSyncState(nextDraft);
+  return nextDraft;
+}
+
+function enqueueDraftSave(saveVersion: number) {
+  if (!draftStorageEnabled) {
+    return;
+  }
+
+  draftSaveQueue = draftSaveQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const content = editorHandle.value?.getContent() ?? latestEditorContent;
+      const nextDraft = await buildPersistedDraft(content, title.value);
+      const savedDraft = await saveProjectDraft(nextDraft);
+      currentDraft.value = savedDraft ?? nextDraft;
+
+      if (isComponentDisposed) {
+        return;
+      }
+
+      if (saveVersion === latestDraftSaveVersion) {
+        draftSaveState.value = "saved";
+      }
+    })
+    .catch((error) => {
+      console.error("Failed to save the project draft", error);
+
+      if (!isComponentDisposed && saveVersion === latestDraftSaveVersion) {
+        draftSaveState.value = "error";
+      }
+    });
+}
+
+function scheduleDraftSave(content: string) {
+  if (!draftStorageEnabled) {
+    return;
+  }
+
+  latestEditorContent = content;
+  latestDraftSaveVersion += 1;
+  const saveVersion = latestDraftSaveVersion;
+
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer);
+  }
+
+  draftSaveState.value = "saving";
+  draftSaveTimer = setTimeout(() => {
+    draftSaveTimer = null;
+    enqueueDraftSave(saveVersion);
+  }, DRAFT_SAVE_DEBOUNCE_MS);
+}
+
+async function flushPendingDraftSave() {
+  if (!draftStorageEnabled) {
+    return;
+  }
+
+  latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
+
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = null;
+    latestDraftSaveVersion += 1;
+    draftSaveState.value = "saving";
+    enqueueDraftSave(latestDraftSaveVersion);
+  } else if (
+    latestEditorContent !== currentDraft.value.content ||
+    title.value !== currentDraft.value.title
+  ) {
+    latestDraftSaveVersion += 1;
+    draftSaveState.value = "saving";
+    enqueueDraftSave(latestDraftSaveVersion);
+  }
+
+  await draftSaveQueue;
+}
+
+function handlePageHide() {
+  void flushPendingDraftSave();
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!hasUnsyncedCloudChanges.value) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+async function loadDraftForRoute(projectId: string | null): Promise<ProjectDraftRecord> {
+  let draft = draftStorageEnabled
+    ? await loadProjectDraft(projectId)
+    : null;
+  draft ??= createEmptyProjectDraft(projectId);
+
+  if (!projectId) {
+    draft.syncState = getDraftSyncState(draft);
+    return draft;
+  }
+
+  const syncResponse = await syncProject(projectId, draft.localChecksum);
+
+  if (syncResponse.needs_download && syncResponse.download) {
+    const archiveBuffer = await downloadProjectArchive(syncResponse.download);
+    const parsedArchive = await parseProjectArchive(archiveBuffer);
+    const downloadedDraft: ProjectDraftRecord = {
+      content: parsedArchive.content,
+      id: getProjectDraftId(syncResponse.project.id),
+      lastSyncedChecksum: syncResponse.project.content_checksum ?? parsedArchive.checksum,
+      lastSyncedTitle: syncResponse.project.title,
+      localChecksum: syncResponse.project.content_checksum ?? parsedArchive.checksum,
+      projectId: syncResponse.project.id,
+      syncState: "synced",
+      title: syncResponse.project.title,
+      updatedAt: Date.now(),
+    };
+    if (draftStorageEnabled) {
+      await saveProjectDraft(downloadedDraft);
+    }
+    return downloadedDraft;
+  }
+
+  const wasLocallyDirty = isDraftDirty(draft);
+  const syncedDraft: ProjectDraftRecord = {
+    ...draft,
+    id: getProjectDraftId(syncResponse.project.id),
+    lastSyncedChecksum: syncResponse.project.content_checksum,
+    lastSyncedTitle: syncResponse.project.title,
+    projectId: syncResponse.project.id,
+    title: wasLocallyDirty ? draft.title : syncResponse.project.title,
+    updatedAt: Date.now(),
+  };
+  syncedDraft.syncState = getDraftSyncState(syncedDraft);
+
+  if (draftStorageEnabled) {
+    await saveProjectDraft(syncedDraft);
+  }
+
+  return syncedDraft;
+}
+
+async function applyDraft(draft: ProjectDraftRecord) {
+  isHydratingDraft = true;
+  currentDraft.value = draft;
+  title.value = draft.title;
+  latestEditorContent = draft.content;
+
+  if (editorHandle.value) {
+    editorHandle.value.setContent(draft.content);
+    editorSnapshot.value = editorHandle.value.getSnapshot();
+  }
+
+  cloudSaveState.value = draft.syncState === "synced" ? "synced" : "idle";
+  draftSaveState.value = draftStorageEnabled ? "saved" : "unsupported";
+  isHydratingDraft = false;
+}
+
+async function hydrateCurrentRoute() {
+  try {
+    const draft = await loadDraftForRoute(routeProjectId.value);
+    await applyDraft(draft);
+  } catch (error) {
+    console.error("Failed to hydrate the project draft", error);
+    cloudSaveState.value = "error";
+    draftSaveState.value = draftStorageEnabled ? "error" : "unsupported";
+  }
+}
+
+async function handleSaveToDrive() {
+  if (!editorHandle.value) {
+    return;
+  }
+
+  const previousDraftId = currentDraft.value.id;
+  cloudSaveState.value = "saving";
+
+  try {
+    const normalizedTitle = getEffectiveTitle(title.value);
+    if (title.value.trim().length === 0) {
+      title.value = normalizedTitle;
+    }
+
+    await flushPendingDraftSave();
+
+    const content = editorHandle.value.getContent();
+    latestEditorContent = content;
+    const archive = await buildProjectArchive(content);
+    const activeProjectId = routeProjectId.value ?? currentDraft.value.projectId ?? undefined;
+    const prepareResponse = await prepareProjectSaveToDrive({
+      content_checksum: archive.checksum,
+      content_length: archive.contentLength,
+      content_type: archive.contentType,
+      description: "",
+      metadata_json: {},
+      project_id: activeProjectId,
+      title: normalizedTitle,
+    });
+
+    if (prepareResponse.needs_upload) {
+      if (!prepareResponse.upload) {
+        throw new Error("The backend did not return a signed upload URL.");
+      }
+      await uploadProjectArchive(prepareResponse.upload, archive.archiveBlob);
+    }
+
+    const savedProject = prepareResponse.needs_upload
+      ? await completeProjectSaveToDrive({
+          content_checksum: archive.checksum,
+          content_length: archive.contentLength,
+          content_type: archive.contentType,
+          description: "",
+          metadata_json: {},
+          project_id: prepareResponse.project_id,
+          title: normalizedTitle,
+        })
+      : prepareResponse.project;
+
+    if (!savedProject) {
+      throw new Error("The backend did not return project metadata.");
+    }
+
+    const syncedDraft: ProjectDraftRecord = {
+      content,
+      id: getProjectDraftId(savedProject.id),
+      lastSyncedChecksum: archive.checksum,
+      lastSyncedTitle: savedProject.title,
+      localChecksum: archive.checksum,
+      projectId: savedProject.id,
+      syncState: "synced",
+      title: normalizedTitle,
+      updatedAt: Date.now(),
+    };
+
+    if (draftStorageEnabled) {
+      await saveProjectDraft(syncedDraft);
+      if (previousDraftId !== syncedDraft.id) {
+        await deleteProjectDraft(previousDraftId);
+      }
+    }
+
+    currentDraft.value = syncedDraft;
+    draftSaveState.value = draftStorageEnabled ? "saved" : draftSaveState.value;
+    cloudSaveState.value = "synced";
+
+    if (routeProjectId.value !== savedProject.id) {
+      await router.replace({
+        name: "Project Detail",
+        params: {
+          projectId: savedProject.id,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Failed to save the project to Drive", error);
+    cloudSaveState.value = "error";
+  }
+}
+
+watch(title, () => {
+  if (!draftStorageEnabled || isHydratingDraft) {
+    return;
+  }
+
+  scheduleDraftSave(editorHandle.value?.getContent() ?? latestEditorContent);
+});
+
+watch(routeProjectId, async (newProjectId, oldProjectId) => {
+  if (oldProjectId === undefined || newProjectId === oldProjectId || !editorReady.value) {
+    return;
+  }
+
+  await hydrateCurrentRoute();
+});
+
+onMounted(async () => {
   if (!editorHostElement.value) {
     return;
   }
 
+  const initialDraft = await loadDraftForRoute(routeProjectId.value).catch((error) => {
+    console.error("Failed to load the initial project draft", error);
+    cloudSaveState.value = "error";
+    draftSaveState.value = draftStorageEnabled ? "error" : "unsupported";
+    return createEmptyProjectDraft(routeProjectId.value);
+  });
+
+  currentDraft.value = initialDraft;
+  title.value = initialDraft.title;
+  latestEditorContent = initialDraft.content;
+
   editorHandle.value = mountEditor(editorHostElement.value, {
+    initialContent: initialDraft.content,
     onChange(snapshot) {
       editorSnapshot.value = snapshot;
+      latestEditorContent = snapshot.content;
+
+      if (isHydratingDraft) {
+        return;
+      }
+
+      if (!hasSeenInitialEditorSnapshot) {
+        hasSeenInitialEditorSnapshot = true;
+        return;
+      }
+
+      scheduleDraftSave(snapshot.content);
     },
     placeholder: "Write system description...",
   });
+
   editorReady.value = true;
+  cloudSaveState.value = initialDraft.syncState === "synced" ? "synced" : "idle";
+  draftSaveState.value = draftStorageEnabled ? "saved" : "unsupported";
+  editorSnapshot.value = editorHandle.value.getSnapshot();
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  window.addEventListener("pagehide", handlePageHide);
   editorHandle.value.focus();
 });
 
 onBeforeUnmount(() => {
+  isComponentDisposed = true;
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+  window.removeEventListener("pagehide", handlePageHide);
+  void flushPendingDraftSave();
   editorHandle.value?.destroy();
   editorHandle.value = null;
 });
@@ -332,7 +797,7 @@ onBeforeUnmount(() => {
 
 .project-create__topbar {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
   padding: 0.25rem 1rem;
@@ -376,6 +841,66 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: flex;
   justify-content: center;
+}
+
+.project-create__topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.project-create__cloud-note {
+  color: var(--project-create-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.project-create__save-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 9.5rem;
+  min-height: 2.1rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(9, 105, 218, 0.2);
+  border-radius: 0.7rem;
+  background: rgba(9, 105, 218, 0.08);
+  color: var(--project-create-accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.project-create__save-button:hover:not(:disabled) {
+  background: rgba(9, 105, 218, 0.12);
+  border-color: rgba(9, 105, 218, 0.28);
+  transform: translateY(-1px);
+}
+
+.project-create__save-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.project-create__save-icon {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+}
+
+.project-create__save-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .project-create__title-input {
@@ -753,6 +1278,11 @@ onBeforeUnmount(() => {
   .project-create__topbar {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+  }
+
+  .project-create__topbar-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .project-create__title-input {

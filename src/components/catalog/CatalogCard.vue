@@ -1,29 +1,43 @@
 <template>
   <article class="card border-0 catalog-card catalog-card-size">
-    <div class="card-body p-0 d-flex flex-column catalog-card__body">
-      <div class="catalog-card__preview-shell">
-        <div class="catalog-card__preview-page">
-          <div class="catalog-card__preview-lines">
-            <span class="catalog-card__preview-line catalog-card__preview-line--xl"></span>
-            <span class="catalog-card__preview-line catalog-card__preview-line--lg"></span>
-            <span class="catalog-card__preview-line catalog-card__preview-line--md"></span>
-            <span class="catalog-card__preview-line catalog-card__preview-line--sm"></span>
-            <span class="catalog-card__preview-line catalog-card__preview-line--lg"></span>
-            <span class="catalog-card__preview-line catalog-card__preview-line--xs"></span>
+    <component
+      :is="item.to ? RouterLink : 'div'"
+      class="catalog-card__link"
+      :to="item.to"
+    >
+      <div class="card-body p-0 d-flex flex-column catalog-card__body">
+        <div class="catalog-card__preview-shell">
+          <div class="catalog-card__preview-page">
+            <div class="catalog-card__preview-lines">
+              <span class="catalog-card__preview-line catalog-card__preview-line--xl"></span>
+              <span class="catalog-card__preview-line catalog-card__preview-line--lg"></span>
+              <span class="catalog-card__preview-line catalog-card__preview-line--md"></span>
+              <span class="catalog-card__preview-line catalog-card__preview-line--sm"></span>
+              <span class="catalog-card__preview-line catalog-card__preview-line--lg"></span>
+              <span class="catalog-card__preview-line catalog-card__preview-line--xs"></span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="catalog-card__content">
-        <h5 class="catalog-card__title mb-0">
-          {{ item.title }}
-        </h5>
+        <div class="catalog-card__content">
+          <div v-if="item.updatedLabel" class="catalog-card__eyebrow">
+            {{ item.updatedLabel }}
+          </div>
+          <h5 class="catalog-card__title mb-0">
+            {{ item.title }}
+          </h5>
+          <p v-if="item.subtitle" class="catalog-card__subtitle mb-0">
+            {{ item.subtitle }}
+          </p>
+        </div>
       </div>
-    </div>
+    </component>
   </article>
 </template>
 
 <script setup lang="ts">
+import { RouterLink } from "vue-router";
+
 import type { CatalogCardItem } from "./types";
 
 defineOptions({ name: "CatalogCard" });
@@ -41,6 +55,14 @@ defineProps<{
   background: transparent;
   box-shadow: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.catalog-card__link {
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
 }
 
 .catalog-card__body {
@@ -109,6 +131,15 @@ defineProps<{
   padding: 0.85rem 0.1rem 0;
 }
 
+.catalog-card__eyebrow {
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
 .catalog-card__title {
   color: #111827;
   font-size: 1rem;
@@ -118,6 +149,13 @@ defineProps<{
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.catalog-card__subtitle {
+  color: #6b7280;
+  font-size: 0.83rem;
+  line-height: 1.35;
+  margin-top: 0.45rem;
 }
 
 @media (max-width: 575.98px) {

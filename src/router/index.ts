@@ -29,6 +29,14 @@ const routes = [
     },
   },
   {
+    path: "/project/:projectId",
+    name: "Project Detail",
+    component: ProjectCreate,
+    meta: {
+      layout: "standalone",
+    },
+  },
+  {
     path: "/project",
     name: "Project",
     component: Project,
