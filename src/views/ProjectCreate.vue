@@ -104,16 +104,7 @@
             </div>
           </div>
 
-          <div class="project-create__sidebar-footer">
-            <button class="project-create__sidebar-fold" type="button">
-              <span class="project-create__tree-caret project-create__tree-caret--closed">›</span>
-              <span>Outline</span>
-            </button>
-            <button class="project-create__sidebar-fold" type="button">
-              <span class="project-create__tree-caret project-create__tree-caret--closed">›</span>
-              <span>Timeline</span>
-            </button>
-          </div>
+
         </section>
       </aside>
 
@@ -227,32 +218,6 @@ function iconMarkup(name: string) {
           <path d="m15 15 4.25 4.25" />
         </svg>
       `;
-    case "source-control":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="7" cy="5.5" r="2" />
-          <circle cx="17" cy="9.5" r="2" />
-          <circle cx="7" cy="18.5" r="2" />
-          <path d="M9 6.5h2.5a3 3 0 0 1 3 3v4.5" />
-          <path d="M9 17.5h2.5a3 3 0 0 0 3-3V11" />
-        </svg>
-      `;
-    case "run":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M7 5.75v12.5l10-6.25-10-6.25Z" />
-          <path d="M5 19.25h14" />
-        </svg>
-      `;
-    case "extensions":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M11.5 3.75H6.75a1 1 0 0 0-1 1V9.5" />
-          <path d="M12.5 20.25h4.75a1 1 0 0 0 1-1V14.5" />
-          <path d="M9.75 12 5.75 8l4-4 4 4-4 4Z" />
-          <path d="M14.25 20l-4-4 4-4 4 4-4 4Z" />
-        </svg>
-      `;
     case "account":
       return `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -284,14 +249,11 @@ function iconMarkup(name: string) {
 const activityItems: ActivityItem[] = [
   { id: "explorer", label: "Explorer", icon: iconMarkup("explorer") },
   { id: "search", label: "Search", icon: iconMarkup("search") },
-  { id: "source-control", label: "Source Control", icon: iconMarkup("source-control") },
-  { id: "run", label: "Run and Debug", icon: iconMarkup("run") },
-  { id: "extensions", label: "Extensions", icon: iconMarkup("extensions") },
 ];
 
 const activityFooterItems: ActivityItem[] = [
   { id: "account", label: "Account", icon: iconMarkup("account") },
-  { id: "settings", label: "Manage", icon: iconMarkup("settings") },
+  { id: "settings", label: "Settings", icon: iconMarkup("settings") },
 ];
 
 const defaultSnapshot: EditorSnapshot = {
