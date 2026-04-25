@@ -136,12 +136,12 @@
       </div>
     </footer>
 
-    <!-- Rate limit toast -->
+    <!-- Save status toast -->
     <transition name="toast-fade">
-      <div v-if="rateLimitToast" class="project-create__toast project-create__toast--warn" role="alert">
-        <span class="project-create__toast-icon" aria-hidden="true">⏱</span>
-        <span>{{ rateLimitToast }}</span>
-        <button class="project-create__toast-close" type="button" aria-label="Dismiss" @click="rateLimitToast = null">✕</button>
+      <div v-if="cloudToast" class="project-create__toast project-create__toast--warn" role="alert">
+        <span class="project-create__toast-icon" aria-hidden="true">!</span>
+        <span>{{ cloudToast }}</span>
+        <button class="project-create__toast-close" type="button" aria-label="Dismiss" @click="cloudToast = null">✕</button>
       </div>
     </transition>
   </div>
@@ -171,6 +171,7 @@ import {
   completeProjectSaveToDrive,
   downloadProjectArchive,
   prepareProjectSaveToDrive,
+  ProjectLimitError,
   RateLimitError,
   syncProject,
   uploadProjectArchive,
@@ -293,17 +294,17 @@ const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjec
 const draftStorageEnabled = canUseProjectDraftStorage();
 const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
 const cloudSaveState = ref<CloudSaveState>("idle");
-const rateLimitToast = ref<string | null>(null);
-let rateLimitToastTimer: ReturnType<typeof setTimeout> | null = null;
+const cloudToast = ref<string | null>(null);
+let cloudToastTimer: ReturnType<typeof setTimeout> | null = null;
 
-function showRateLimitToast(message: string) {
-  if (rateLimitToastTimer) {
-    clearTimeout(rateLimitToastTimer);
+function showCloudToast(message: string) {
+  if (cloudToastTimer) {
+    clearTimeout(cloudToastTimer);
   }
-  rateLimitToast.value = message;
-  rateLimitToastTimer = setTimeout(() => {
-    rateLimitToast.value = null;
-    rateLimitToastTimer = null;
+  cloudToast.value = message;
+  cloudToastTimer = setTimeout(() => {
+    cloudToast.value = null;
+    cloudToastTimer = null;
   }, 5000);
 }
 const draftSaveLabel = computed(() => {
@@ -601,7 +602,7 @@ async function hydrateCurrentRoute() {
     await applyDraft(draft);
   } catch (error) {
     if (error instanceof RateLimitError) {
-      showRateLimitToast("You're syncing too fast — please slow down and try again in a few seconds.");
+      showCloudToast("You're syncing too fast — please slow down and try again in a few seconds.");
     } else {
       console.error("Failed to hydrate the project draft", error);
     }
@@ -696,7 +697,10 @@ async function handleSaveToDrive() {
     }
   } catch (error) {
     if (error instanceof RateLimitError) {
-      showRateLimitToast("You're saving too fast — please slow down and try again in a few seconds.");
+      showCloudToast("You're saving too fast — please slow down and try again in a few seconds.");
+      cloudSaveState.value = "error";
+    } else if (error instanceof ProjectLimitError) {
+      showCloudToast(error.message);
       cloudSaveState.value = "error";
     } else {
       console.error("Failed to save the project to Drive", error);
@@ -768,6 +772,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   isComponentDisposed = true;
+  if (cloudToastTimer) {
+    clearTimeout(cloudToastTimer);
+    cloudToastTimer = null;
+  }
   window.removeEventListener("beforeunload", handleBeforeUnload);
   window.removeEventListener("pagehide", handlePageHide);
   void flushPendingDraftSave();

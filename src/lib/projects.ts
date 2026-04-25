@@ -95,6 +95,13 @@ export class RateLimitError extends Error {
   }
 }
 
+export class ProjectLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProjectLimitError";
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(backendUrl(path), {
     credentials: "include",
@@ -105,6 +112,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     const message = await parseError(response);
     if (response.status === 429) {
       throw new RateLimitError(message);
+    }
+    if (response.status === 409) {
+      throw new ProjectLimitError(message);
     }
     throw new Error(message);
   }
