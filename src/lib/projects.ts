@@ -122,8 +122,26 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestEmpty(path: string, init?: RequestInit): Promise<void> {
+  const response = await fetch(backendUrl(path), {
+    credentials: "include",
+    ...init,
+  });
+
+  if (!response.ok) {
+    const message = await parseError(response);
+    throw new Error(message);
+  }
+}
+
 export async function listProjects(): Promise<ProjectListResponse> {
   return requestJson<ProjectListResponse>("/api/projects/");
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  return requestEmpty(`/api/projects/${projectId}`, {
+    method: "DELETE",
+  });
 }
 
 export async function prepareProjectSaveToDrive(

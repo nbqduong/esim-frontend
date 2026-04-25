@@ -26,6 +26,20 @@
           {{ cloudStatusLabel }}
         </span>
         <button
+          v-if="activeProjectId"
+          class="project-create__delete-button"
+          type="button"
+          :disabled="isDeleteProjectDisabled"
+          @click="handleDeleteProject"
+        >
+          <span
+            class="project-create__save-icon"
+            aria-hidden="true"
+            v-html="iconMarkup('trash')"
+          ></span>
+          <span>{{ deleteButtonLabel }}</span>
+        </button>
+        <button
           class="project-create__save-button"
           type="button"
           :disabled="isSaveToDriveDisabled"
@@ -169,6 +183,7 @@ import { mountEditor } from "@/features/project-create/editor/editor-host";
 import { buildProjectArchive, parseProjectArchive } from "@/lib/project-content";
 import {
   completeProjectSaveToDrive,
+  deleteProject,
   downloadProjectArchive,
   prepareProjectSaveToDrive,
   ProjectLimitError,
@@ -252,6 +267,15 @@ function iconMarkup(name: string) {
           <path d="M12 4.5v1.75M12 17.75V19.5M19.5 12h-1.75M6.25 12H4.5M17.3 6.7l-1.2 1.2M7.9 16.1l-1.2 1.2M17.3 17.3l-1.2-1.2M7.9 7.9 6.7 6.7" />
         </svg>
       `;
+    case "trash":
+      return `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.75 7.25h14.5" />
+          <path d="M9.25 3.75h5.5" />
+          <path d="M7.25 7.25v11a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-11" />
+          <path d="M10 10.25v5.5M14 10.25v5.5" />
+        </svg>
+      `;
     default:
       return "";
   }
@@ -291,9 +315,11 @@ const editorReady = ref(false);
 const editorSnapshot = ref<EditorSnapshot>(defaultSnapshot);
 const selectedActivity = ref("explorer");
 const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjectId.value));
+const activeProjectId = computed(() => routeProjectId.value ?? currentDraft.value.projectId);
 const draftStorageEnabled = canUseProjectDraftStorage();
 const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
 const cloudSaveState = ref<CloudSaveState>("idle");
+const isDeletingProject = ref(false);
 const cloudToast = ref<string | null>(null);
 let cloudToastTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -322,8 +348,7 @@ const draftSaveLabel = computed(() => {
   }
 });
 const projectReferenceLabel = computed(() => {
-  const activeProjectId = routeProjectId.value ?? currentDraft.value.projectId;
-  return activeProjectId ? `PROJECT ${activeProjectId.slice(0, 8)}` : "LOCAL DRAFT";
+  return activeProjectId.value ? `PROJECT ${activeProjectId.value.slice(0, 8)}` : "LOCAL DRAFT";
 });
 
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
@@ -417,8 +442,14 @@ const saveButtonLabel = computed(() => {
   return "Save to Drive";
 });
 
+const deleteButtonLabel = computed(() => (isDeletingProject.value ? "Deleting..." : "Delete"));
+
 const isSaveToDriveDisabled = computed(
-  () => !editorReady.value || cloudSaveState.value === "saving",
+  () => !editorReady.value || cloudSaveState.value === "saving" || isDeletingProject.value,
+);
+
+const isDeleteProjectDisabled = computed(
+  () => !editorReady.value || !activeProjectId.value || cloudSaveState.value === "saving" || isDeletingProject.value,
 );
 
 async function buildPersistedDraft(
@@ -709,6 +740,34 @@ async function handleSaveToDrive() {
   }
 }
 
+async function handleDeleteProject() {
+  const projectId = activeProjectId.value;
+  if (!projectId) {
+    return;
+  }
+
+  const confirmed = window.confirm("Delete this project permanently?");
+  if (!confirmed) {
+    return;
+  }
+
+  isDeletingProject.value = true;
+
+  try {
+    await deleteProject(projectId);
+    if (draftStorageEnabled) {
+      await deleteProjectDraft(getProjectDraftId(projectId));
+    }
+    cloudToast.value = null;
+    await router.replace({ name: "Project" });
+  } catch (error) {
+    console.error("Failed to delete the project", error);
+    showCloudToast(error instanceof Error ? error.message : "Failed to delete the project.");
+  } finally {
+    isDeletingProject.value = false;
+  }
+}
+
 watch(title, () => {
   if (!draftStorageEnabled || isHydratingDraft) {
     return;
@@ -921,13 +980,45 @@ onBeforeUnmount(() => {
     transform 160ms ease;
 }
 
+.project-create__delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 7.75rem;
+  min-height: 2.1rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(207, 34, 46, 0.24);
+  border-radius: 0.7rem;
+  background: rgba(207, 34, 46, 0.08);
+  color: #b42318;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
 .project-create__save-button:hover:not(:disabled) {
   background: rgba(9, 105, 218, 0.12);
   border-color: rgba(9, 105, 218, 0.28);
   transform: translateY(-1px);
 }
 
+.project-create__delete-button:hover:not(:disabled) {
+  background: rgba(207, 34, 46, 0.12);
+  border-color: rgba(207, 34, 46, 0.32);
+  transform: translateY(-1px);
+}
+
 .project-create__save-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.project-create__delete-button:disabled {
   opacity: 0.65;
   cursor: default;
 }
