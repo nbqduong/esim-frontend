@@ -135,6 +135,15 @@
         {{ projectReferenceLabel }}
       </div>
     </footer>
+
+    <!-- Rate limit toast -->
+    <transition name="toast-fade">
+      <div v-if="rateLimitToast" class="project-create__toast project-create__toast--warn" role="alert">
+        <span class="project-create__toast-icon" aria-hidden="true">⏱</span>
+        <span>{{ rateLimitToast }}</span>
+        <button class="project-create__toast-close" type="button" aria-label="Dismiss" @click="rateLimitToast = null">✕</button>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -162,6 +171,7 @@ import {
   completeProjectSaveToDrive,
   downloadProjectArchive,
   prepareProjectSaveToDrive,
+  RateLimitError,
   syncProject,
   uploadProjectArchive,
 } from "@/lib/projects";
@@ -283,6 +293,19 @@ const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjec
 const draftStorageEnabled = canUseProjectDraftStorage();
 const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
 const cloudSaveState = ref<CloudSaveState>("idle");
+const rateLimitToast = ref<string | null>(null);
+let rateLimitToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showRateLimitToast(message: string) {
+  if (rateLimitToastTimer) {
+    clearTimeout(rateLimitToastTimer);
+  }
+  rateLimitToast.value = message;
+  rateLimitToastTimer = setTimeout(() => {
+    rateLimitToast.value = null;
+    rateLimitToastTimer = null;
+  }, 5000);
+}
 const draftSaveLabel = computed(() => {
   switch (draftSaveState.value) {
     case "saving":
@@ -577,7 +600,11 @@ async function hydrateCurrentRoute() {
     const draft = await loadDraftForRoute(routeProjectId.value);
     await applyDraft(draft);
   } catch (error) {
-    console.error("Failed to hydrate the project draft", error);
+    if (error instanceof RateLimitError) {
+      showRateLimitToast("You're syncing too fast — please slow down and try again in a few seconds.");
+    } else {
+      console.error("Failed to hydrate the project draft", error);
+    }
     cloudSaveState.value = "error";
     draftSaveState.value = draftStorageEnabled ? "error" : "unsupported";
   }
@@ -668,8 +695,13 @@ async function handleSaveToDrive() {
       });
     }
   } catch (error) {
-    console.error("Failed to save the project to Drive", error);
-    cloudSaveState.value = "error";
+    if (error instanceof RateLimitError) {
+      showRateLimitToast("You're saving too fast — please slow down and try again in a few seconds.");
+      cloudSaveState.value = "error";
+    } else {
+      console.error("Failed to save the project to Drive", error);
+      cloudSaveState.value = "error";
+    }
   }
 }
 
@@ -1306,5 +1338,61 @@ onBeforeUnmount(() => {
     gap: 0.85rem;
     overflow-x: auto;
   }
+}
+
+/* Toast notification */
+.project-create__toast {
+  position: fixed;
+  bottom: 2.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  max-width: 24rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.project-create__toast--warn {
+  background: #fff8e6;
+  border: 1px solid #f0b429;
+  color: #7a4f00;
+}
+
+.project-create__toast-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.project-create__toast-close {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 0.875rem;
+  padding: 0 0.1rem;
+  line-height: 1;
+}
+
+.project-create__toast-close:hover {
+  opacity: 1;
+}
+
+.toast-fade-enter-active,
+.toast-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(0.5rem);
 }
 </style>

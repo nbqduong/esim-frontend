@@ -88,6 +88,13 @@ async function parseError(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`.trim();
 }
 
+export class RateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(backendUrl(path), {
     credentials: "include",
@@ -95,7 +102,11 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(await parseError(response));
+    const message = await parseError(response);
+    if (response.status === 429) {
+      throw new RateLimitError(message);
+    }
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
