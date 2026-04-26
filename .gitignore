@@ -26,5 +26,6 @@ npm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
-public/
-.codex
+public/*
+src/wasm/generated/*.js
+src/wasm/generated/*.wasm

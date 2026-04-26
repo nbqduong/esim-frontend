@@ -1,0 +1,48 @@
+[
+    {
+        "modelUrl": "/models/wiring.glb",
+        "objects": [
+            {
+                "id": "object-01",
+                "name": "3D Unit 01",
+                "description": "Primary 3D object at the scene origin.",
+                "state": "LED_Off"
+            },
+            {
+                "id": "object-02",
+                "name": "3D Unit 02",
+                "description": "Second 3D object with a small horizontal gap.",
+                "state": "LED_Off"
+            },
+            {
+                "id": "object-03",
+                "name": "3D Unit 03",
+                "description": "Third 3D object in the first row.",
+                "state": "LED_Off"
+            }
+        ]
+    },
+    {
+        "modelUrl": "/models/random1.glb",
+        "objects": [
+            {
+                "id": "object-04",
+                "name": "3D Unit 04",
+                "description": "First random1 model placed after the earlier 3D objects.",
+                "state": "LED_Off"
+            },
+            {
+                "id": "object-05",
+                "name": "3D Unit 05",
+                "description": "Second random1 model continuing the same grid.",
+                "state": "LED_Off"
+            },
+            {
+                "id": "object-06",
+                "name": "3D Unit 06",
+                "description": "Third random1 model in the grid.",
+                "state": "LED_Off"
+            }
+        ]
+    }
+]

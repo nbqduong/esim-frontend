@@ -10,12 +10,14 @@
   },
   "dependencies": {
     "bootstrap": "^5.3.3",
+    "three": "^0.177.0",
     "vue": "^3.5.13",
     "vue-router": "^5.0.4",
     "vuex": "^4.0.2"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/three": "^0.177.0",
     "@vitejs/plugin-vue": "^5.2.3",
     "sass-embedded": "^1.88.0",
     "typescript": "~5.8.3",
