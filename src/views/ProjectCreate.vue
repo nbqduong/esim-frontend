@@ -250,17 +250,13 @@
               ref="drawing2DHandle"
               v-show="activeWorkspaceView === 'drawing'"
               :flush-draft="flushPendingDraftSave"
+              :initial-content="currentDraft.content"
               :project-id="activeProjectId"
+              @editor-ready="handleDrawingEditorReady"
               @error="handleDrawingSimulationError"
+              @snapshot-change="handleDrawingEditorSnapshotChange"
               @status-change="handleDrawingSimulationStatusChange"
-            >
-              <template #default>
-                <div
-                  ref="editorHostElement"
-                  class="project-create__editor-host"
-                ></div>
-              </template>
-            </Drawing2D>
+            />
             <div
               v-if="activeWorkspaceView !== 'drawing' && isRouteHydrating"
               class="project-create__editor-placeholder"
@@ -339,7 +335,6 @@ import type {
   EditorHandle,
   EditorSnapshot,
 } from "@/features/project-create/editor/editor-host";
-import { mountEditor } from "@/features/project-create/editor/editor-host";
 import { buildProjectArchive, parseProjectArchive } from "@/lib/project-content";
 import {
   completeProjectSaveToDrive,
@@ -382,7 +377,7 @@ type WorkspaceViewItem = {
   label: string;
 };
 
-type Drawing2DHandle = {
+type Drawing2DHandle = EditorHandle & {
   cleanup: () => void;
   startSimulation: () => Promise<void>;
   stopSimulation: () => void;
@@ -501,7 +496,6 @@ const routeProjectId = computed(() =>
 );
 
 const title = ref("");
-const editorHostElement = ref<HTMLElement | null>(null);
 const editorHandle = ref<EditorHandle | null>(null);
 const editorReady = ref(false);
 const editorSnapshot = ref<EditorSnapshot>(defaultSnapshot);
@@ -779,6 +773,40 @@ function handleDrawingSimulationStatusChange(status: DrawingSimulationStatus) {
 
 function handleDrawingSimulationError(message: string) {
   drawingSimulationError.value = message;
+}
+
+function handleDrawingEditorReady(snapshot: EditorSnapshot) {
+  const handle = drawing2DHandle.value;
+
+  if (!handle) {
+    return;
+  }
+
+  editorHandle.value = handle;
+  editorReady.value = true;
+  editorSnapshot.value = snapshot;
+  latestEditorContent = handle.getContent();
+  hasSeenInitialEditorSnapshot = true;
+
+  if (!isRouteHydrating.value) {
+    handle.focus();
+  }
+}
+
+function handleDrawingEditorSnapshotChange(snapshot: EditorSnapshot) {
+  editorSnapshot.value = snapshot;
+  latestEditorContent = snapshot.content;
+
+  if (isHydratingDraft) {
+    return;
+  }
+
+  if (!hasSeenInitialEditorSnapshot) {
+    hasSeenInitialEditorSnapshot = true;
+    return;
+  }
+
+  scheduleDraftSave(snapshot.content);
 }
 
 async function handleStartDrawingSimulation() {
@@ -1175,11 +1203,6 @@ watch(activeWorkspaceView, (nextView, previousView) => {
 });
 
 onMounted(async () => {
-  if (!editorHostElement.value) {
-    isRouteHydrating.value = false;
-    return;
-  }
-
   const initialDraft = await loadDraftForRoute(routeProjectId.value).catch((error) => {
     console.error("Failed to load the initial project draft", error);
     cloudSaveState.value = "error";
@@ -1187,37 +1210,10 @@ onMounted(async () => {
     return createEmptyProjectDraft(routeProjectId.value);
   });
 
-  currentDraft.value = initialDraft;
-  title.value = initialDraft.title;
-  latestEditorContent = initialDraft.content;
-
-  editorHandle.value = mountEditor(editorHostElement.value, {
-    initialContent: initialDraft.content,
-    onChange(snapshot) {
-      editorSnapshot.value = snapshot;
-      latestEditorContent = snapshot.content;
-
-      if (isHydratingDraft) {
-        return;
-      }
-
-      if (!hasSeenInitialEditorSnapshot) {
-        hasSeenInitialEditorSnapshot = true;
-        return;
-      }
-
-      scheduleDraftSave(snapshot.content);
-    },
-    placeholder: "Write system description...",
-  });
-
-  editorReady.value = true;
-  cloudSaveState.value = initialDraft.syncState === "synced" ? "synced" : "idle";
-  draftSaveState.value = draftStorageEnabled ? "saved" : "unsupported";
-  editorSnapshot.value = editorHandle.value.getSnapshot();
+  await applyDraft(initialDraft);
   window.addEventListener("beforeunload", handleBeforeUnload);
   window.addEventListener("pagehide", handlePageHide);
-  editorHandle.value.focus();
+  editorHandle.value?.focus();
   isRouteHydrating.value = false;
 });
 
@@ -1861,12 +1857,6 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.92));
   overflow: hidden;
-}
-
-.project-create__editor-host {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
 }
 
 .project-create__editor-placeholder {
