@@ -267,7 +267,7 @@ const activeWorkspaceView = ref<WorkspaceView>("drawing");
 const drawing2DHandle = ref<Drawing2DHandle | null>(null);
 const drawingSimulationStatus = ref<DrawingSimulationStatus>("idle");
 const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjectId.value));
-const activeProjectId = computed(() => routeProjectId.value ?? currentDraft.value.projectId);
+const activeProjectId = computed(() => currentDraft.value.projectId ?? routeProjectId.value);
 const draftStorageEnabled = canUseProjectDraftStorage();
 const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
 const cloudSaveState = ref<CloudSaveState>("idle");
@@ -290,14 +290,18 @@ function showCloudToast(message: string) {
   }, 5000);
 }
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
+const CLOUD_AUTO_SAVE_DEBOUNCE_MS = 3000;
 
 let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let draftSaveQueue: Promise<void> = Promise.resolve();
+let cloudAutoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let cloudAutoSaveQueue: Promise<void> = Promise.resolve();
 let isComponentDisposed = false;
 let isHydratingDraft = false;
 let hasSeenInitialEditorSnapshot = false;
 let latestEditorContent = "";
 let latestDraftSaveVersion = 0;
+let latestCloudAutoSaveVersion = 0;
 
 function getEffectiveTitle(candidate: string): string {
   const trimmed = candidate.trim();
@@ -433,6 +437,7 @@ function handleDrawingEditorSnapshotChange(snapshot: EditorSnapshot) {
   }
 
   scheduleDraftSave(snapshot.content);
+  scheduleCloudAutoSave();
 }
 
 function navigateHome() {
@@ -452,12 +457,13 @@ async function buildPersistedDraft(
   titleValue: string,
 ): Promise<ProjectDraftRecord> {
   const archive = await buildProjectArchive(content);
+  const projectId = currentDraft.value.projectId;
   const nextDraft: ProjectDraftRecord = {
     ...currentDraft.value,
     content,
-    id: getProjectDraftId(routeProjectId.value ?? currentDraft.value.projectId),
+    id: getProjectDraftId(projectId),
     localChecksum: archive.checksum,
-    projectId: routeProjectId.value ?? currentDraft.value.projectId,
+    projectId,
     syncState: "idle",
     title: titleValue,
     updatedAt: Date.now(),
@@ -477,11 +483,13 @@ function enqueueDraftSave(saveVersion: number) {
       const content = editorHandle.value?.getContent() ?? latestEditorContent;
       const nextDraft = await buildPersistedDraft(content, title.value);
       const savedDraft = await saveProjectDraft(nextDraft);
-      currentDraft.value = savedDraft ?? nextDraft;
+      const nextCurrentDraft = savedDraft ?? nextDraft;
 
       if (isComponentDisposed) {
         return;
       }
+
+      currentDraft.value = nextCurrentDraft;
 
       if (saveVersion === latestDraftSaveVersion) {
         draftSaveState.value = "saved";
@@ -514,6 +522,85 @@ function scheduleDraftSave(content: string) {
     draftSaveTimer = null;
     enqueueDraftSave(saveVersion);
   }, DRAFT_SAVE_DEBOUNCE_MS);
+}
+
+function canScheduleCloudAutoSave() {
+  return (
+    editorReady.value &&
+    !isHydratingDraft &&
+    !isRouteHydrating.value &&
+    !isDeletingProject.value
+  );
+}
+
+type CloudAutoSaveOptions = {
+  allowDisposed?: boolean;
+  replaceRoute?: boolean;
+};
+
+function enqueueCloudAutoSave(saveVersion: number, options: CloudAutoSaveOptions = {}) {
+  cloudAutoSaveQueue = cloudAutoSaveQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (
+        (!options.allowDisposed && isComponentDisposed) ||
+        saveVersion !== latestCloudAutoSaveVersion ||
+        cloudSaveState.value === "saving" ||
+        isDeletingProject.value ||
+        isRouteHydrating.value
+      ) {
+        return;
+      }
+
+      const content = editorHandle.value?.getContent() ?? latestEditorContent;
+
+      if (
+        !hasUnsyncedCloudChanges.value ||
+        isBlankDraft(title.value, content)
+      ) {
+        return;
+      }
+
+      await saveProjectToDrive({ replaceRoute: options.replaceRoute });
+    });
+}
+
+function scheduleCloudAutoSave() {
+  if (!canScheduleCloudAutoSave()) {
+    return;
+  }
+
+  const content = editorHandle.value?.getContent() ?? latestEditorContent;
+
+  if (isBlankDraft(title.value, content)) {
+    return;
+  }
+
+  latestCloudAutoSaveVersion += 1;
+  const saveVersion = latestCloudAutoSaveVersion;
+
+  if (cloudAutoSaveTimer) {
+    clearTimeout(cloudAutoSaveTimer);
+  }
+
+  cloudAutoSaveTimer = setTimeout(() => {
+    cloudAutoSaveTimer = null;
+    enqueueCloudAutoSave(saveVersion);
+  }, CLOUD_AUTO_SAVE_DEBOUNCE_MS);
+}
+
+async function flushPendingCloudAutoSave(options: CloudAutoSaveOptions = {}) {
+  if (cloudAutoSaveTimer) {
+    clearTimeout(cloudAutoSaveTimer);
+    cloudAutoSaveTimer = null;
+    latestCloudAutoSaveVersion += 1;
+    enqueueCloudAutoSave(latestCloudAutoSaveVersion, options);
+  } else if (hasUnsyncedCloudChanges.value && !isBlankDraft(title.value, latestEditorContent)) {
+    latestCloudAutoSaveVersion += 1;
+    enqueueCloudAutoSave(latestCloudAutoSaveVersion, options);
+  }
+
+  await cloudAutoSaveQueue;
 }
 
 async function flushPendingDraftSave() {
@@ -552,7 +639,9 @@ async function loadEmbeddedCatalog(): Promise<ModelCatalog> {
 }
 
 function handlePageHide() {
+  latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
   void flushPendingDraftSave();
+  void flushPendingCloudAutoSave({ replaceRoute: false });
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -651,26 +740,29 @@ async function hydrateCurrentRoute() {
   }
 }
 
-async function handleSaveToDrive() {
-  if (!editorHandle.value) {
-    return;
-  }
+type DriveSaveOptions = {
+  replaceRoute?: boolean;
+};
 
+async function saveProjectToDrive(options: DriveSaveOptions = {}) {
+  const replaceRoute = options.replaceRoute ?? true;
   const previousDraftId = currentDraft.value.id;
-  cloudSaveState.value = "saving";
+  if (!isComponentDisposed) {
+    cloudSaveState.value = "saving";
+  }
 
   try {
     const normalizedTitle = getEffectiveTitle(title.value);
-    if (title.value.trim().length === 0) {
+    if (title.value.trim().length === 0 && !isComponentDisposed) {
       title.value = normalizedTitle;
     }
 
     await flushPendingDraftSave();
 
-    const content = editorHandle.value.getContent();
+    const content = editorHandle.value?.getContent() ?? latestEditorContent;
     latestEditorContent = content;
     const archive = await buildProjectArchive(content);
-    const activeProjectId = routeProjectId.value ?? currentDraft.value.projectId ?? undefined;
+    const activeProjectId = currentDraft.value.projectId ?? undefined;
     const prepareResponse = await prepareProjectSaveToDrive({
       content_checksum: archive.checksum,
       content_length: archive.contentLength,
@@ -723,11 +815,15 @@ async function handleSaveToDrive() {
       }
     }
 
+    if (isComponentDisposed) {
+      return;
+    }
+
     currentDraft.value = syncedDraft;
     draftSaveState.value = draftStorageEnabled ? "saved" : draftSaveState.value;
     cloudSaveState.value = "synced";
 
-    if (routeProjectId.value !== savedProject.id) {
+    if (replaceRoute && routeProjectId.value !== savedProject.id) {
       await router.replace({
         name: "Project Detail",
         params: {
@@ -737,16 +833,26 @@ async function handleSaveToDrive() {
     }
   } catch (error) {
     if (error instanceof RateLimitError) {
-      showCloudToast("You're saving too fast — please slow down and try again in a few seconds.");
-      cloudSaveState.value = "error";
+      if (!isComponentDisposed) {
+        showCloudToast("You're saving too fast — please slow down and try again in a few seconds.");
+        cloudSaveState.value = "error";
+      }
     } else if (error instanceof ProjectLimitError) {
-      showCloudToast(error.message);
-      cloudSaveState.value = "error";
+      if (!isComponentDisposed) {
+        showCloudToast(error.message);
+        cloudSaveState.value = "error";
+      }
     } else {
       console.error("Failed to save the project to Drive", error);
-      cloudSaveState.value = "error";
+      if (!isComponentDisposed) {
+        cloudSaveState.value = "error";
+      }
     }
   }
+}
+
+async function handleSaveToDrive() {
+  await saveProjectToDrive();
 }
 
 async function handleDeleteProject() {
@@ -778,11 +884,22 @@ async function handleDeleteProject() {
 }
 
 watch(title, () => {
-  if (!draftStorageEnabled || isHydratingDraft) {
+  if (isHydratingDraft) {
     return;
   }
 
   scheduleDraftSave(editorHandle.value?.getContent() ?? latestEditorContent);
+  scheduleCloudAutoSave();
+});
+
+watch(cloudSaveState, (nextState, previousState) => {
+  if (
+    previousState === "saving" &&
+    nextState !== "saving" &&
+    hasUnsyncedCloudChanges.value
+  ) {
+    scheduleCloudAutoSave();
+  }
 });
 
 watch(routeProjectId, async (newProjectId, oldProjectId) => {
@@ -790,6 +907,9 @@ watch(routeProjectId, async (newProjectId, oldProjectId) => {
     return;
   }
 
+  latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
+  await flushPendingDraftSave();
+  await flushPendingCloudAutoSave({ replaceRoute: false });
   await hydrateCurrentRoute();
 });
 
@@ -819,7 +939,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  isComponentDisposed = true;
+  latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
   if (cloudToastTimer) {
     clearTimeout(cloudToastTimer);
     cloudToastTimer = null;
@@ -828,9 +948,11 @@ onBeforeUnmount(() => {
   window.removeEventListener("pagehide", handlePageHide);
   drawing2DHandle.value?.cleanup();
   drawing2DHandle.value = null;
-  void flushPendingDraftSave();
   editorHandle.value?.destroy();
   editorHandle.value = null;
+  void flushPendingDraftSave();
+  isComponentDisposed = true;
+  void flushPendingCloudAutoSave({ allowDisposed: true, replaceRoute: false });
 });
 </script>
 
