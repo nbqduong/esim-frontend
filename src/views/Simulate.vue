@@ -1,18 +1,55 @@
 <template>
-  <section
-    ref="viewerRef"
-    class="simulate-viewer"
-    aria-label="3D simulation scene"
-  >
-    <div v-if="catalogLoading" class="simulate-viewer__overlay">
-      {{ loadingMessage }}
-    </div>
-    <div
-      v-else-if="!viewerReady && !errorMessage"
-      class="simulate-viewer__overlay"
+  <section class="simulate-screen">
+    <header class="simulate-screen__toolbar">
+      <div class="simulate-screen__controls">
+        <button
+          class="simulate-screen__button simulate-screen__button--accent"
+          type="button"
+          :disabled="!canStartPause"
+          @click="startPauseSimulation"
+        >
+          {{ startPauseLabel }}
+        </button>
+        <button
+          class="simulate-screen__button"
+          type="button"
+          :disabled="!canStop"
+          @click="stopSimulation"
+        >
+          Stop
+        </button>
+      </div>
+      <div class="simulate-screen__meta">
+        <span>{{ statusLabel }}</span>
+        <span>{{ sourceLabel }}</span>
+        <span v-if="catalogSummary">{{ catalogSummary }}</span>
+      </div>
+      <p v-if="errorMessage" class="simulate-screen__error" role="alert">
+        {{ errorMessage }}
+      </p>
+    </header>
+
+    <section
+      ref="viewerRef"
+      class="simulate-viewer"
+      aria-label="3D simulation scene"
     >
-      Preparing the 3D viewer...
-    </div>
+      <div v-if="catalogLoading" class="simulate-viewer__overlay">
+        {{ loadingMessage }}
+      </div>
+      <div
+        v-else-if="!viewerReady && !errorMessage"
+        class="simulate-viewer__overlay"
+      >
+        Preparing the 3D viewer...
+      </div>
+      <div
+        v-else-if="errorMessage"
+        class="simulate-viewer__overlay"
+      >
+        {{ errorMessage }}
+      </div>
+    </section>
   </section>
 </template>
 
@@ -262,6 +299,88 @@ defineExpose({
 </script>
 
 <style scoped>
+.simulate-screen {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.simulate-screen__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.35rem;
+  padding: 0 0 0.75rem;
+  flex: 0 0 auto;
+}
+
+.simulate-screen__controls,
+.simulate-screen__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.simulate-screen__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0 0.65rem;
+  border: 1px solid #d0d7de;
+  border-radius: 0.45rem;
+  background: #ffffff;
+  color: #24292f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.simulate-screen__button:hover:not(:disabled) {
+  border-color: rgba(9, 105, 218, 0.35);
+  background: rgba(9, 105, 218, 0.06);
+  color: #0969da;
+}
+
+.simulate-screen__button--accent {
+  border-color: rgba(9, 105, 218, 0.35);
+  background: rgba(9, 105, 218, 0.1);
+  color: #0969da;
+}
+
+.simulate-screen__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.simulate-screen__meta {
+  min-width: 0;
+  overflow: hidden;
+  color: #57606a;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.simulate-screen__meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.simulate-screen__error {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
 .simulate-viewer {
   position: relative;
   display: flex;

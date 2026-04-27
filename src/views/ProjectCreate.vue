@@ -4,11 +4,50 @@
     <div class="project-create__glow project-create__glow--bottom" aria-hidden="true"></div>
 
     <header class="project-create__topbar">
-      <div class="project-create__brand-group">
-        <div class="project-create__brand">E-SIM</div>
-        <RouterLink class="project-create__back-link" to="/project">
-          Projects
-        </RouterLink>
+      <div class="project-create__view-tabs">
+        <button
+          class="project-create__home-button"
+          type="button"
+          aria-label="Go to home"
+          title="Home"
+          @click="navigateHome"
+        >
+          <span
+            class="project-create__home-icon"
+            aria-hidden="true"
+            v-html="iconMarkup('home')"
+          ></span>
+        </button>
+
+        <SystemMenu
+          :save-disabled="isSaveToDriveDisabled"
+          :save-label="saveButtonLabel"
+          :status-label="cloudStatusLabel"
+          :title="title"
+          @file="handleMenuFile"
+          @save="handleSaveToDrive"
+          @settings="navigateSettings"
+        />
+
+        <div
+          class="project-create__view-tab-list"
+          role="tablist"
+          aria-label="Page views"
+        >
+          <button
+            v-for="view in workspaceViewItems"
+            :key="view.id"
+            class="project-create__view-tab"
+            :class="{ 'project-create__view-tab--active': activeWorkspaceView === view.id }"
+            type="button"
+            role="tab"
+            :aria-selected="activeWorkspaceView === view.id"
+            :tabindex="activeWorkspaceView === view.id ? 0 : -1"
+            @click="activeWorkspaceView = view.id"
+          >
+            {{ view.label }}
+          </button>
+        </div>
       </div>
 
       <div class="project-create__title-slot">
@@ -56,195 +95,8 @@
     </header>
 
     <div class="project-create__layout">
-      <aside class="project-create__side-shell">
-        <nav class="project-create__activitybar" aria-label="Workbench">
-          <div class="project-create__activity-group">
-            <button
-              v-for="item in activityItems"
-              :key="item.id"
-              class="project-create__activity-button"
-              :class="{ 'project-create__activity-button--active': selectedActivity === item.id }"
-              type="button"
-              :aria-label="item.label"
-              :title="item.label"
-              @click="selectedActivity = item.id"
-            >
-              <span class="project-create__activity-icon" v-html="item.icon"></span>
-            </button>
-          </div>
-
-          <div class="project-create__activity-group project-create__activity-group--bottom">
-            <button
-              v-for="item in activityFooterItems"
-              :key="item.id"
-              class="project-create__activity-button"
-              type="button"
-              :aria-label="item.label"
-              :title="item.label"
-            >
-              <span class="project-create__activity-icon" v-html="item.icon"></span>
-            </button>
-          </div>
-        </nav>
-
-        <section class="project-create__sidebar" aria-label="Explorer">
-          <div class="project-create__sidebar-header">
-            <span class="project-create__sidebar-title">Explorer</span>
-            <button class="project-create__sidebar-action" type="button" aria-label="More actions">
-              <span class="project-create__sidebar-action-dot"></span>
-              <span class="project-create__sidebar-action-dot"></span>
-              <span class="project-create__sidebar-action-dot"></span>
-            </button>
-          </div>
-
-          <div class="project-create__sidebar-section">
-            <div class="project-create__sidebar-section-heading">
-              <span class="project-create__tree-caret project-create__tree-caret--open">⌄</span>
-              <span class="project-create__sidebar-section-label">{{ sidebarSectionLabel }}</span>
-            </div>
-
-            <div
-              v-if="selectedActivity === 'information'"
-              class="project-create__sidebar-information"
-            >
-              <div class="project-create__info-grid">
-                <div
-                  v-for="row in informationRows"
-                  :key="row.label"
-                  class="project-create__info-row"
-                >
-                  <span class="project-create__info-label">{{ row.label }}</span>
-                  <span class="project-create__info-value">{{ row.value }}</span>
-                </div>
-              </div>
-
-              <div class="project-create__info-actions" aria-label="Workspace views">
-                <button
-                  v-for="view in workspaceViewItems"
-                  :key="view.id"
-                  class="project-create__info-button"
-                  :class="{ 'project-create__info-button--active': activeWorkspaceView === view.id }"
-                  type="button"
-                  @click="activeWorkspaceView = view.id"
-                >
-                  {{ view.label }}
-                </button>
-              </div>
-
-              <div
-                v-if="activeWorkspaceView === 'drawing'"
-                class="project-create__info-actions"
-                aria-label="Drawing simulation"
-              >
-                <button
-                  class="project-create__info-button project-create__info-button--accent"
-                  type="button"
-                  :disabled="!drawingCanStart"
-                  @click="handleStartDrawingSimulation"
-                >
-                  Start
-                </button>
-                <button
-                  class="project-create__info-button"
-                  type="button"
-                  :disabled="!drawingCanStop"
-                  @click="handleStopDrawingSimulation"
-                >
-                  Stop
-                </button>
-              </div>
-
-              <div
-                v-else-if="activeWorkspaceView === 'simulate'"
-                class="project-create__info-actions"
-                aria-label="Simulate controls"
-              >
-                <button
-                  class="project-create__info-button project-create__info-button--accent"
-                  type="button"
-                  :disabled="!simulateCanStartPause"
-                  @click="handleStartPauseSimulate"
-                >
-                  {{ simulateStartPauseLabel }}
-                </button>
-                <button
-                  class="project-create__info-button"
-                  type="button"
-                  :disabled="!simulateCanStop"
-                  @click="handleStopSimulate"
-                >
-                  Stop
-                </button>
-              </div>
-
-              <p
-                v-if="activeWorkspaceView === 'simulate'"
-                class="project-create__info-meta"
-              >
-                {{ simulateDescription }}
-              </p>
-
-              <p
-                v-if="activeWorkspaceView === 'simulate' && simulateCatalogSummary"
-                class="project-create__info-meta"
-              >
-                {{ simulateCatalogSummary }}
-              </p>
-
-              <p
-                v-if="activeWorkspaceView === 'drawing' && drawingSimulationError"
-                class="project-create__info-error"
-                role="alert"
-              >
-                {{ drawingSimulationError }}
-              </p>
-
-              <p
-                v-if="activeWorkspaceView === 'simulate' && simulateErrorMessage"
-                class="project-create__info-error"
-                role="alert"
-              >
-                {{ simulateErrorMessage }}
-              </p>
-            </div>
-
-            <div
-              v-else-if="selectedActivity === 'search'"
-              class="project-create__sidebar-note"
-            >
-              Select Information to view controls for the active workspace tab.
-            </div>
-
-            <div
-              v-else
-              class="project-create__sidebar-note"
-            >
-              Open the Information activity to load current view details here.
-            </div>
-          </div>
-
-
-        </section>
-      </aside>
-
       <main class="project-create__workspace">
         <section class="project-create__editor-shell">
-          <div class="project-create__editor-toolbar" role="tablist" aria-label="Page views">
-            <button
-              v-for="view in workspaceViewItems"
-              :key="view.id"
-              class="project-create__editor-tab"
-              :class="{ 'project-create__editor-tab--active': activeWorkspaceView === view.id }"
-              type="button"
-              role="tab"
-              :aria-selected="activeWorkspaceView === view.id"
-              :tabindex="activeWorkspaceView === view.id ? 0 : -1"
-              @click="activeWorkspaceView = view.id"
-            >
-              {{ view.label }}
-            </button>
-          </div>
-
           <section class="project-create__editor-panel">
             <Drawing2D
               ref="drawing2DHandle"
@@ -253,7 +105,6 @@
               :initial-content="currentDraft.content"
               :project-id="activeProjectId"
               @editor-ready="handleDrawingEditorReady"
-              @error="handleDrawingSimulationError"
               @snapshot-change="handleDrawingEditorSnapshotChange"
               @status-change="handleDrawingSimulationStatusChange"
             />
@@ -265,10 +116,8 @@
             </div>
             <SimulateView
               v-else-if="activeWorkspaceView === 'simulate'"
-              ref="simulateViewHandle"
               :key="activeWorkspaceViewKey"
               :catalog-loader="loadEmbeddedCatalog"
-              @state-change="handleSimulateStateChange"
             />
             <PDFView
               v-else-if="activeWorkspaceView === 'pdf'"
@@ -285,26 +134,6 @@
       </main>
     </div>
 
-    <footer class="project-create__statusbar">
-      <div class="project-create__status-item">
-        <span class="project-create__status-dot" aria-hidden="true" />
-        <span>{{ editorReady ? "READY" : "LOADING" }}</span>
-      </div>
-      <div class="project-create__status-item">
-        {{ draftSaveLabel }}
-      </div>
-      <div class="project-create__status-item">
-        Ln {{ editorSnapshot.currentLine }}, Col {{ editorSnapshot.currentColumn }}
-      </div>
-      <div class="project-create__status-item">
-        {{ editorSnapshot.charCount }} chars
-      </div>
-      <div class="project-create__status-item">{{ cloudStatusLabel }}</div>
-      <div class="project-create__status-item project-create__status-item--right">
-        {{ projectReferenceLabel }}
-      </div>
-    </footer>
-
     <!-- Save status toast -->
     <transition name="toast-fade">
       <div v-if="cloudToast" class="project-create__toast project-create__toast--warn" role="alert">
@@ -320,6 +149,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import SystemMenu from "@/components/project/system-menu.vue";
 import { loadModelCatalogFromDraft, parseModelCatalog } from "@/data/data-loader";
 import {
   canUseProjectDraftStorage,
@@ -354,19 +184,6 @@ import SimulateView from "@/views/Simulate.vue";
 
 defineOptions({ name: "ProjectCreate" });
 
-type ActivityItem = {
-  icon: string;
-  id: SidebarActivity;
-  label: string;
-};
-
-type ActivityFooterItem = {
-  icon: string;
-  id: string;
-  label: string;
-};
-
-type SidebarActivity = "explorer" | "information" | "search";
 type WorkspaceView = "csv" | "drawing" | "pdf" | "simulate";
 type CloudSaveState = "error" | "idle" | "saving" | "synced";
 type DraftSaveState = "error" | "idle" | "saved" | "saving" | "unsupported";
@@ -383,29 +200,14 @@ type Drawing2DHandle = EditorHandle & {
   stopSimulation: () => void;
 };
 
-type SimulateViewStatus = "error" | "idle" | "paused" | "running";
-
-type SimulateViewHandle = {
-  startPauseSimulation: () => Promise<void>;
-  stopSimulation: () => void;
-};
-
-type SimulatePanelState = {
-  canStartPause: boolean;
-  canStop: boolean;
-  catalogLoading: boolean;
-  catalogSummary: string;
-  errorMessage: string;
-  loadingMessage: string;
-  sourceLabel: string;
-  startPauseLabel: string;
-  statusLabel: string;
-  simulationStatus: SimulateViewStatus;
-  viewerReady: boolean;
-};
-
 function iconMarkup(name: string) {
   switch (name) {
+    case "chevron-right":
+      return `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9.75 6.75 5.5 5.25-5.5 5.25" />
+        </svg>
+      `;
     case "cloud-upload":
       return `
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -414,40 +216,12 @@ function iconMarkup(name: string) {
           <path d="m9.5 12.25 2.5-2.5 2.5 2.5" />
         </svg>
       `;
-    case "explorer":
+    case "home":
       return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M4.75 5.75h8.5l2 2H19.25a1 1 0 0 1 1 1v9.5a1 1 0 0 1-1 1H4.75a1 1 0 0 1-1-1V6.75a1 1 0 0 1 1-1Z" />
-          <path d="M8 5.75v13.5" />
-        </svg>
-      `;
-    case "search":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="10.5" cy="10.5" r="5.5" />
-          <path d="m15 15 4.25 4.25" />
-        </svg>
-      `;
-    case "information":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="7.5" />
-          <path d="M12 10.25v5" />
-          <circle cx="12" cy="7.25" r="0.5" fill="currentColor" stroke="none" />
-        </svg>
-      `;
-    case "account":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="8" r="3.25" />
-          <path d="M5.5 19.25a6.5 6.5 0 0 1 13 0" />
-        </svg>
-      `;
-    case "settings":
-      return `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="2.5" />
-          <path d="M12 4.5v1.75M12 17.75V19.5M19.5 12h-1.75M6.25 12H4.5M17.3 6.7l-1.2 1.2M7.9 16.1l-1.2 1.2M17.3 17.3l-1.2-1.2M7.9 7.9 6.7 6.7" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m4.75 11.25 7.25-6.5 7.25 6.5" />
+          <path d="M6.75 10.25v8a1 1 0 0 0 1 1h8.5a1 1 0 0 0 1-1v-8" />
+          <path d="M10 19.25v-5.5h4v5.5" />
         </svg>
       `;
     case "trash":
@@ -464,16 +238,6 @@ function iconMarkup(name: string) {
   }
 }
 
-const activityItems: ActivityItem[] = [
-  { id: "explorer", label: "Explorer", icon: iconMarkup("explorer") },
-  { id: "search", label: "Search", icon: iconMarkup("search") },
-  { id: "information", label: "Information", icon: iconMarkup("information") },
-];
-
-const activityFooterItems: ActivityFooterItem[] = [
-  { id: "account", label: "Account", icon: iconMarkup("account") },
-  { id: "settings", label: "Settings", icon: iconMarkup("settings") },
-];
 const workspaceViewItems: WorkspaceViewItem[] = [
   { id: "drawing", label: "Drawing" },
   { id: "simulate", label: "Simulate" },
@@ -499,25 +263,9 @@ const title = ref("");
 const editorHandle = ref<EditorHandle | null>(null);
 const editorReady = ref(false);
 const editorSnapshot = ref<EditorSnapshot>(defaultSnapshot);
-const selectedActivity = ref<SidebarActivity>("explorer");
 const activeWorkspaceView = ref<WorkspaceView>("drawing");
 const drawing2DHandle = ref<Drawing2DHandle | null>(null);
-const simulateViewHandle = ref<SimulateViewHandle | null>(null);
 const drawingSimulationStatus = ref<DrawingSimulationStatus>("idle");
-const drawingSimulationError = ref<string | null>(null);
-const simulatePanelState = ref<SimulatePanelState>({
-  canStartPause: false,
-  canStop: false,
-  catalogLoading: true,
-  catalogSummary: "",
-  errorMessage: "",
-  loadingMessage: "Loading model catalog from current draft...",
-  sourceLabel: "Current draft",
-  startPauseLabel: "Start",
-  statusLabel: "Loading",
-  simulationStatus: "idle",
-  viewerReady: false,
-});
 const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjectId.value));
 const activeProjectId = computed(() => routeProjectId.value ?? currentDraft.value.projectId);
 const draftStorageEnabled = canUseProjectDraftStorage();
@@ -541,24 +289,6 @@ function showCloudToast(message: string) {
     cloudToastTimer = null;
   }, 5000);
 }
-const draftSaveLabel = computed(() => {
-  switch (draftSaveState.value) {
-    case "saving":
-      return "AUTOSAVE SAVING";
-    case "saved":
-      return "AUTOSAVE SAVED";
-    case "error":
-      return "AUTOSAVE ERROR";
-    case "unsupported":
-      return "AUTOSAVE OFF";
-    default:
-      return "AUTOSAVE IDLE";
-  }
-});
-const projectReferenceLabel = computed(() => {
-  return activeProjectId.value ? `PROJECT ${activeProjectId.value.slice(0, 8)}` : "LOCAL DRAFT";
-});
-
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
 
 let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -652,103 +382,6 @@ const saveButtonLabel = computed(() => {
 
 const deleteButtonLabel = computed(() => (isDeletingProject.value ? "Deleting..." : "Delete"));
 
-const sidebarSectionLabel = computed(() => {
-  if (selectedActivity.value === "search") {
-    return "Search";
-  }
-  if (selectedActivity.value === "information") {
-    return "Information";
-  }
-  return "Explorer";
-});
-
-const activeWorkspaceLabel = computed(() => {
-  const matchedView = workspaceViewItems.find((view) => view.id === activeWorkspaceView.value);
-  return matchedView?.label ?? "Unknown";
-});
-
-const drawingSimulationStatusLabel = computed(() => {
-  if (drawingSimulationStatus.value === "running") {
-    return "Running";
-  }
-  if (drawingSimulationStatus.value === "starting") {
-    return "Starting";
-  }
-  return "Idle";
-});
-
-const simulateTitle = "Interactive 3D model gallery";
-const simulateDescription =
-  "This view loads the model catalog, builds the 3D scene, and lets the WASM simulator drive live object state.";
-
-const simulateStatusLabel = computed(() => simulatePanelState.value.statusLabel);
-const simulateStartPauseLabel = computed(() => simulatePanelState.value.startPauseLabel);
-const simulateErrorMessage = computed(() => simulatePanelState.value.errorMessage);
-const simulateCatalogSummary = computed(() => {
-  if (simulatePanelState.value.catalogSummary) {
-    return simulatePanelState.value.catalogSummary;
-  }
-
-  if (simulatePanelState.value.catalogLoading) {
-    return simulatePanelState.value.loadingMessage;
-  }
-
-  return "";
-});
-
-const informationRows = computed(() => {
-  const rows: Array<{ label: string; value: string }> = [
-    { label: "View", value: activeWorkspaceLabel.value },
-    { label: "Cloud", value: cloudStatusLabel.value },
-    { label: "Autosave", value: draftSaveLabel.value },
-    { label: "Project", value: projectReferenceLabel.value },
-  ];
-
-  if (activeWorkspaceView.value === "drawing") {
-    rows.push(
-      { label: "Simulation", value: drawingSimulationStatusLabel.value },
-      { label: "Line", value: String(editorSnapshot.value.currentLine) },
-      { label: "Column", value: String(editorSnapshot.value.currentColumn) },
-      { label: "Chars", value: String(editorSnapshot.value.charCount) },
-    );
-  }
-
-  if (activeWorkspaceView.value === "simulate") {
-    rows.push(
-      { label: "Screen", value: "Simulation Screen" },
-      { label: "Title", value: simulateTitle },
-      { label: "Status", value: simulateStatusLabel.value },
-      { label: "Source", value: simulatePanelState.value.sourceLabel },
-    );
-  }
-
-  return rows;
-});
-
-const drawingCanStart = computed(
-  () =>
-    activeWorkspaceView.value === "drawing" &&
-    editorReady.value &&
-    !isRouteHydrating.value &&
-    drawingSimulationStatus.value === "idle",
-);
-
-const drawingCanStop = computed(
-  () =>
-    activeWorkspaceView.value === "drawing" &&
-    drawingSimulationStatus.value === "running",
-);
-
-const simulateCanStartPause = computed(
-  () =>
-    activeWorkspaceView.value === "simulate" && simulatePanelState.value.canStartPause,
-);
-
-const simulateCanStop = computed(
-  () =>
-    activeWorkspaceView.value === "simulate" && simulatePanelState.value.canStop,
-);
-
 const isSaveToDriveDisabled = computed(
   () =>
     !editorReady.value ||
@@ -766,13 +399,6 @@ const isDeleteProjectDisabled = computed(
 
 function handleDrawingSimulationStatusChange(status: DrawingSimulationStatus) {
   drawingSimulationStatus.value = status;
-  if (status !== "idle") {
-    drawingSimulationError.value = null;
-  }
-}
-
-function handleDrawingSimulationError(message: string) {
-  drawingSimulationError.value = message;
 }
 
 function handleDrawingEditorReady(snapshot: EditorSnapshot) {
@@ -809,41 +435,16 @@ function handleDrawingEditorSnapshotChange(snapshot: EditorSnapshot) {
   scheduleDraftSave(snapshot.content);
 }
 
-async function handleStartDrawingSimulation() {
-  if (!drawingCanStart.value || !drawing2DHandle.value) {
-    return;
-  }
-
-  drawingSimulationError.value = null;
-  await drawing2DHandle.value.startSimulation();
+function navigateHome() {
+  void router.push("/home");
 }
 
-function handleStopDrawingSimulation() {
-  if (!drawingCanStop.value) {
-    return;
-  }
-
-  drawing2DHandle.value?.stopSimulation();
+function navigateSettings() {
+  void router.push("/user-settings");
 }
 
-function handleSimulateStateChange(nextState: SimulatePanelState) {
-  simulatePanelState.value = nextState;
-}
-
-async function handleStartPauseSimulate() {
-  if (!simulateCanStartPause.value || !simulateViewHandle.value) {
-    return;
-  }
-
-  await simulateViewHandle.value.startPauseSimulation();
-}
-
-function handleStopSimulate() {
-  if (!simulateCanStop.value) {
-    return;
-  }
-
-  simulateViewHandle.value?.stopSimulation();
+function handleMenuFile() {
+  showCloudToast("File menu placeholder selected.");
 }
 
 async function buildPersistedDraft(
@@ -1286,44 +887,109 @@ onBeforeUnmount(() => {
 
 .project-create__topbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 1fr) auto;
   gap: 1rem;
   align-items: center;
-  padding: 0.25rem 1rem;
+  min-height: 2.15rem;
+  padding: 0.25rem 0.75rem;
   position: relative;
   z-index: 1;
   background: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid var(--project-create-border);
 }
 
-.project-create__brand-group {
+.project-create__view-tabs {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.55rem;
   min-width: 0;
 }
 
-.project-create__brand {
-  padding: 0rem 0.7rem;
-  border: 1px solid rgba(9, 105, 218, 0.2);
-  border-radius: 0.8rem;
-  background: #f6f8fa;
-  color: var(--project-create-accent);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+.project-create__view-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
 }
 
-.project-create__back-link {
+.project-create__home-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgba(208, 215, 222, 0.85);
+  border-radius: 0.5rem;
+  background: #ffffff;
   color: var(--project-create-muted);
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: color 160ms ease;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.project-create__back-link:hover {
+.project-create__home-button:hover {
+  border-color: rgba(9, 105, 218, 0.28);
+  background: rgba(9, 105, 218, 0.08);
   color: var(--project-create-accent);
+}
+
+.project-create__home-button:focus-visible {
+  outline: 2px solid rgba(9, 105, 218, 0.28);
+  outline-offset: 2px;
+}
+
+.project-create__home-icon {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.project-create__home-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
+.project-create__view-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(208, 215, 222, 0.85);
+  border-radius: 0.45rem;
+  background: #ffffff;
+  color: var(--project-create-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.project-create__view-tab:hover {
+  border-color: rgba(9, 105, 218, 0.28);
+  background: rgba(9, 105, 218, 0.06);
+  color: var(--project-create-foreground);
+}
+
+.project-create__view-tab--active {
+  border-color: rgba(9, 105, 218, 0.3);
+  background: rgba(9, 105, 218, 0.1);
+  color: var(--project-create-accent);
+}
+
+.project-create__view-tab:focus-visible {
+  outline: 2px solid rgba(9, 105, 218, 0.28);
+  outline-offset: 2px;
 }
 
 .project-create__title-slot {
@@ -1453,335 +1119,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.project-create__side-shell {
-  display: flex;
-  flex: 0 0 19.5rem;
-  min-width: 19.5rem;
-  border-right: 1px solid var(--project-create-border);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.project-create__activitybar {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 3rem;
-  padding: 0.35rem 0;
-  border-right: 1px solid var(--project-create-border);
-  background: #f6f8fa;
-}
-
-.project-create__activity-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  align-items: center;
-}
-
-.project-create__activity-group--bottom {
-  padding-bottom: 0.15rem;
-}
-
-.project-create__activity-button {
-  position: relative;
-  width: 100%;
-  height: 2.5rem;
-  border: 0;
-  background: transparent;
-  color: var(--project-create-muted);
-  transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.project-create__activity-button:hover {
-  background: var(--project-create-hover);
-  color: var(--project-create-foreground);
-}
-
-.project-create__activity-button--active {
-  color: var(--project-create-foreground);
-  background: rgba(9, 105, 218, 0.06);
-}
-
-.project-create__activity-button--active::before {
-  position: absolute;
-  left: 0;
-  top: 0.4rem;
-  bottom: 0.4rem;
-  width: 2px;
-  border-radius: 999px;
-  background: var(--project-create-accent);
-  content: "";
-}
-
-.project-create__activity-icon {
-  display: inline-flex;
-  width: 1.15rem;
-  height: 1.15rem;
-}
-
-.project-create__activity-icon :deep(svg),
-.project-create__tree-icon :deep(svg) {
-  width: 100%;
-  height: 100%;
-}
-
-.project-create__sidebar {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.project-create__sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.75rem 0.45rem;
-  border-bottom: 1px solid rgba(208, 215, 222, 0.7);
-}
-
-.project-create__sidebar-title {
-  color: var(--project-create-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.project-create__sidebar-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  padding: 0.25rem 0.3rem;
-  border: 0;
-  border-radius: 0.4rem;
-  background: transparent;
-  color: var(--project-create-muted);
-}
-
-.project-create__sidebar-action:hover {
-  background: var(--project-create-hover);
-  color: var(--project-create-foreground);
-}
-
-.project-create__sidebar-action-dot {
-  width: 0.18rem;
-  height: 0.18rem;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.project-create__sidebar-section {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding-top: 0.4rem;
-}
-
-.project-create__sidebar-section-heading,
-.project-create__sidebar-fold {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  width: 100%;
-  padding: 0.15rem 0.75rem;
-  border: 0;
-  background: transparent;
-  color: var(--project-create-foreground);
-  font-size: 0.77rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-align: left;
-  text-transform: uppercase;
-}
-
-.project-create__sidebar-section-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-create__tree {
-  padding-top: 0.15rem;
-}
-
-.project-create__tree-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  width: 100%;
-  min-height: 1.6rem;
-  border: 0;
-  background: transparent;
-  color: var(--project-create-foreground);
-  font-size: 0.84rem;
-  text-align: left;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.project-create__tree-row:hover {
-  background: var(--project-create-hover);
-}
-
-.project-create__tree-row--active {
-  background: var(--project-create-selected);
-}
-
-.project-create__tree-caret {
-  display: inline-flex;
-  justify-content: center;
-  width: 0.7rem;
-  color: var(--project-create-muted);
-  font-size: 0.9rem;
-  flex: 0 0 auto;
-}
-
-.project-create__tree-caret--empty {
-  opacity: 0;
-}
-
-.project-create__tree-icon {
-  display: inline-flex;
-  width: 0.95rem;
-  height: 0.95rem;
-  color: #57606a;
-  flex: 0 0 auto;
-}
-
-.project-create__tree-row--active .project-create__tree-icon {
-  color: var(--project-create-accent);
-}
-
-.project-create__tree-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-create__tree-meta {
-  margin-left: auto;
-  padding-right: 0.65rem;
-  color: var(--project-create-accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.project-create__sidebar-footer {
-  border-top: 1px solid rgba(208, 215, 222, 0.7);
-  padding: 0.35rem 0 0.5rem;
-}
-
-.project-create__sidebar-information {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.4rem 0.75rem 0.75rem;
-}
-
-.project-create__sidebar-note {
-  padding: 0.45rem 0.75rem;
-  color: var(--project-create-muted);
-  font-size: 0.8rem;
-  line-height: 1.45;
-}
-
-.project-create__info-grid {
-  display: grid;
-  gap: 0.3rem;
-}
-
-.project-create__info-row {
-  display: grid;
-  grid-template-columns: minmax(0, 5.4rem) minmax(0, 1fr);
-  gap: 0.5rem;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.project-create__info-label {
-  color: var(--project-create-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.project-create__info-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--project-create-foreground);
-  font-size: 0.79rem;
-  font-weight: 600;
-}
-
-.project-create__info-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.project-create__info-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 1.75rem;
-  padding: 0 0.55rem;
-  border: 1px solid var(--project-create-border);
-  border-radius: 0.45rem;
-  background: #ffffff;
-  color: var(--project-create-foreground);
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.project-create__info-button:hover:not(:disabled) {
-  border-color: rgba(9, 105, 218, 0.35);
-  background: rgba(9, 105, 218, 0.06);
-  color: var(--project-create-accent);
-}
-
-.project-create__info-button--active {
-  border-color: rgba(9, 105, 218, 0.3);
-  background: rgba(9, 105, 218, 0.1);
-  color: var(--project-create-accent);
-}
-
-.project-create__info-button--accent {
-  border-color: rgba(9, 105, 218, 0.35);
-  background: rgba(9, 105, 218, 0.1);
-  color: var(--project-create-accent);
-}
-
-.project-create__info-button:disabled {
-  opacity: 0.5;
-}
-
-.project-create__info-error {
-  margin: 0;
-  color: #b42318;
-  font-size: 0.74rem;
-  line-height: 1.4;
-}
-
-.project-create__info-meta {
-  margin: 0;
-  color: var(--project-create-muted);
-  font-size: 0.76rem;
-  line-height: 1.4;
-}
-
 .project-create__workspace {
   flex: 1 1 auto;
   min-width: 0;
@@ -1905,34 +1242,12 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0.55rem rgba(26, 127, 55, 0.3);
 }
 
-@media (max-width: 991.98px) {
-  .project-create__layout {
-    flex-direction: column;
-  }
-
-  .project-create__side-shell {
-    flex: 0 0 auto;
-    min-width: 0;
-    height: 19rem;
-    border-right: 0;
-    border-bottom: 1px solid var(--project-create-border);
-  }
-
-  .project-create__workspace {
-    min-height: 20rem;
-  }
-}
-
 @media (max-width: 767.98px) {
-  .project-create__topbar,
-  .project-create__statusbar {
-    padding-left: 0.85rem;
-    padding-right: 0.85rem;
-  }
-
   .project-create__topbar {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
   }
 
   .project-create__topbar-actions {
@@ -1944,22 +1259,8 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 
-  .project-create__side-shell {
-    height: 16rem;
-  }
-
-  .project-create__editor-toolbar {
-    padding-left: 0.7rem;
-    padding-right: 0.7rem;
-  }
-
   .project-create__editor-panel {
     padding: 0.7rem;
-  }
-
-  .project-create__statusbar {
-    gap: 0.85rem;
-    overflow-x: auto;
   }
 }
 

@@ -1,29 +1,88 @@
 <template>
   <section class="drawing-2d">
-    <div class="drawing-2d__surface">
-      <iframe
-        ref="editorFrameElement"
-        allow="fullscreen; gamepad; webgpu"
-        class="drawing-2d__frame"
-        :srcdoc="cppWebFrameDocument"
-        title="Drawing canvas"
-        @load="handleEditorFrameLoad"
-      ></iframe>
-
-      <div
-        v-if="!editorReady"
-        class="drawing-2d__loading"
-        role="status"
-        aria-live="polite"
-      >
-        Loading drawing canvas...
+    <header class="drawing-2d__toolbar">
+      <div class="drawing-2d__toolbar-group">
+        <button
+          class="drawing-2d__button drawing-2d__button--accent"
+          type="button"
+          :disabled="!canStartSimulation"
+          @click="startSimulation"
+        >
+          Start
+        </button>
+        <button
+          class="drawing-2d__button"
+          type="button"
+          :disabled="!canStopSimulation"
+          @click="stopSimulation"
+        >
+          Stop
+        </button>
       </div>
+      <p v-if="simulationError" class="drawing-2d__error" role="alert">
+        {{ simulationError }}
+      </p>
+    </header>
+
+    <div class="drawing-2d__surface">
+      <div class="drawing-2d__canvas-pane">
+        <iframe
+          ref="editorFrameElement"
+          allow="fullscreen; gamepad"
+          class="drawing-2d__frame"
+          :srcdoc="cppWebFrameDocument"
+          title="Drawing canvas"
+          @load="handleEditorFrameLoad"
+        ></iframe>
+
+        <div
+          v-if="!editorReady"
+          class="drawing-2d__loading"
+          role="status"
+          aria-live="polite"
+        >
+          Loading drawing canvas...
+        </div>
+      </div>
+
+      <label class="drawing-2d__source-pane" for="drawing-2d-source-editor">
+        <span class="drawing-2d__source-header">Text Editor</span>
+        <textarea
+          id="drawing-2d-source-editor"
+          ref="sourceTextareaElement"
+          class="drawing-2d__source-input"
+          :readonly="simulationOutput !== null"
+          :value="sourceText"
+          placeholder="Paste or type project JSON here..."
+          spellcheck="false"
+          @input="handleSourceTextareaInput"
+          @click="handleSourceTextareaSelection"
+          @keyup="handleSourceTextareaSelection"
+          @select="handleSourceTextareaSelection"
+        ></textarea>
+      </label>
     </div>
+
+    <footer class="drawing-2d__statusbar">
+      <div class="drawing-2d__status-item">
+        <span class="drawing-2d__status-dot" aria-hidden="true" />
+        <span>{{ editorReady ? "READY" : "LOADING" }}</span>
+      </div>
+      <div class="drawing-2d__status-item">
+        SIMULATION {{ simulationStatusLabel }}
+      </div>
+      <div class="drawing-2d__status-item">
+        Ln {{ editorSnapshot.currentLine }}, Col {{ editorSnapshot.currentColumn }}
+      </div>
+      <div class="drawing-2d__status-item">
+        {{ editorSnapshot.charCount }} chars
+      </div>
+    </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { loadModelCatalogFromDraft } from "@/data/data-loader";
 import type {
@@ -60,9 +119,13 @@ const emit = defineEmits<{
 }>();
 
 const editorFrameElement = ref<HTMLIFrameElement | null>(null);
+const sourceTextareaElement = ref<HTMLTextAreaElement | null>(null);
 const editorReady = ref(false);
 const simulationOutput = ref<string | null>(null);
+const simulationStatus = ref<SimulationStatus>("idle");
+const simulationError = ref("");
 const editorSnapshot = ref<EditorSnapshot>(buildSnapshot(props.initialContent, props.initialContent.length));
+const sourceText = ref(props.initialContent);
 const cppWebFrameDocument = `
 <!doctype html>
 <html lang="en">
@@ -126,18 +189,33 @@ const cppWebFrameDocument = `
       .cpp-web-shell[data-state="ready"] #status:empty {
         opacity: 0;
       }
+
+      #paste-target {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        border: 0;
+        opacity: 0;
+        resize: none;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
     <div class="cpp-web-shell" data-state="loading">
-      <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+      <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
       <div id="status">Loading drawing canvas...</div>
+      <textarea id="paste-target" aria-hidden="true" tabindex="-1"></textarea>
     </div>
 
     <script>
       const shellElement = document.querySelector(".cpp-web-shell");
       const statusElement = document.getElementById("status");
       const canvasElement = document.getElementById("canvas");
+      const pasteTargetElement = document.getElementById("paste-target");
 
       function setStatus(text) {
         const nextText = typeof text === "string" ? text : "";
@@ -154,11 +232,25 @@ const cppWebFrameDocument = `
         false,
       );
 
+      function focusCanvas() {
+        canvasElement.focus({ preventScroll: true });
+      }
+
+      function armPasteTarget() {
+        pasteTargetElement.value = "";
+        pasteTargetElement.focus({ preventScroll: true });
+        pasteTargetElement.select();
+      }
+
+      canvasElement.addEventListener("pointerdown", () => {
+        focusCanvas();
+      });
+
       const cppWebBridge = {
         isReady: false,
         onContentChanged: null,
         focus() {
-          canvasElement.focus();
+          focusCanvas();
         },
         getContent() {
           if (!this.isReady || typeof Module?.UTF8ToString !== "function") {
@@ -192,6 +284,75 @@ const cppWebFrameDocument = `
           }),
         );
       };
+
+      function emitPasteText(text) {
+        if (!text) {
+          return;
+        }
+
+        window.dispatchEvent(
+          new CustomEvent("cpp-web-paste-text", {
+            detail: {
+              text,
+            },
+          }),
+        );
+      }
+
+      function handlePaste(event) {
+        const text = event.clipboardData?.getData("text/plain") ?? "";
+
+        if (!text) {
+          return;
+        }
+
+        event.preventDefault();
+        emitPasteText(text);
+        focusCanvas();
+      }
+
+      function handlePasteTargetInput() {
+        const text = pasteTargetElement.value;
+
+        if (!text) {
+          return;
+        }
+
+        pasteTargetElement.value = "";
+        emitPasteText(text);
+        focusCanvas();
+      }
+
+      async function handlePasteShortcut(event) {
+        if ((!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== "v") {
+          return;
+        }
+
+        armPasteTarget();
+
+        if (typeof navigator.clipboard?.readText === "function") {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              emitPasteText(text);
+              pasteTargetElement.value = "";
+              focusCanvas();
+            }
+          } catch (error) {
+            // Firefox often blocks readText here. The focused textarea paste
+            // target still catches the browser's native paste path.
+          }
+        }
+      }
+
+      window.addEventListener("paste", handlePaste);
+      document.addEventListener("paste", handlePaste);
+      canvasElement.addEventListener("paste", handlePaste);
+      pasteTargetElement.addEventListener("paste", handlePaste);
+      pasteTargetElement.addEventListener("input", handlePasteTargetInput);
+      window.addEventListener("keydown", handlePasteShortcut);
+      document.addEventListener("keydown", handlePasteShortcut);
+      canvasElement.addEventListener("keydown", handlePasteShortcut);
 
       var Module = {
         print(...args) {
@@ -232,14 +393,32 @@ const cppWebFrameDocument = `
 </html>
 `;
 
-let contentPollTimer: ReturnType<typeof setInterval> | null = null;
 let cppWebReadyListener: ((event: Event) => void) | null = null;
+let cppWebPasteListener: ((event: Event) => void) | null = null;
 let latestContent = props.initialContent;
 let pendingContent = props.initialContent;
 let projectSimulator: ProjectSimulator | null = null;
 let sourceContent = props.initialContent;
 let sourceCursorIndex = props.initialContent.length;
 let trackedCursorIndex = props.initialContent.length;
+
+const canStartSimulation = computed(
+  () => editorReady.value && simulationStatus.value === "idle",
+);
+
+const canStopSimulation = computed(
+  () => simulationStatus.value === "running" || simulationStatus.value === "starting",
+);
+
+const simulationStatusLabel = computed(() => {
+  if (simulationStatus.value === "running") {
+    return "RUNNING";
+  }
+  if (simulationStatus.value === "starting") {
+    return "STARTING";
+  }
+  return "IDLE";
+});
 
 function buildSnapshot(content: string, cursorIndex: number): EditorSnapshot {
   const clampedCursor = Math.min(Math.max(cursorIndex, 0), content.length);
@@ -287,6 +466,17 @@ function updateSourceSnapshot() {
   editorSnapshot.value = buildSnapshot(sourceContent, sourceCursorIndex);
 }
 
+function syncSourceText(content: string) {
+  sourceText.value = content;
+
+  if (
+    sourceTextareaElement.value &&
+    sourceTextareaElement.value.value !== content
+  ) {
+    sourceTextareaElement.value.value = content;
+  }
+}
+
 function commitSourceContent(
   content: string,
   cursorIndex = trackedCursorIndex,
@@ -297,6 +487,7 @@ function commitSourceContent(
   pendingContent = content;
   sourceContent = content;
   sourceCursorIndex = trackedCursorIndex;
+  syncSourceText(content);
   updateSourceSnapshot();
 
   if (emitSnapshot) {
@@ -320,51 +511,12 @@ function getBridge(): CppWebBridge | null {
   return getFrameWindow()?.cppWebBridge ?? null;
 }
 
-function stopContentPolling() {
-  if (contentPollTimer !== null) {
-    clearInterval(contentPollTimer);
-    contentPollTimer = null;
-  }
-}
-
 function pushContentToBridge(content: string) {
   const bridge = getBridge();
 
   if (bridge?.isReady) {
     bridge.setContent(content);
   }
-}
-
-function syncContentFromBridge(force = false) {
-  const bridge = getBridge();
-
-  if (!bridge?.isReady) {
-    return;
-  }
-
-  const nextContent = bridge.getContent();
-
-  if (!force && nextContent === latestContent) {
-    return;
-  }
-
-  const nextCursorIndex = force
-    ? Math.min(trackedCursorIndex, nextContent.length)
-    : estimateCursorIndex(latestContent, nextContent);
-
-  if (simulationOutput.value !== null) {
-    commitDisplayedContent(nextContent, nextCursorIndex);
-    return;
-  }
-
-  commitSourceContent(nextContent, nextCursorIndex);
-}
-
-function startContentPolling() {
-  stopContentPolling();
-  contentPollTimer = setInterval(() => {
-    syncContentFromBridge();
-  }, 250);
 }
 
 function handleCppWebReady() {
@@ -386,17 +538,18 @@ function handleCppWebReady() {
     updateSourceSnapshot();
   }
 
-  startContentPolling();
   emit("editorReady", editorSnapshot.value);
 }
 
 function detachFrameIntegration() {
-  stopContentPolling();
-
   const frameWindow = getFrameWindow();
 
   if (frameWindow && cppWebReadyListener) {
     frameWindow.removeEventListener("cpp-web-ready", cppWebReadyListener);
+  }
+
+  if (frameWindow && cppWebPasteListener) {
+    frameWindow.removeEventListener("cpp-web-paste-text", cppWebPasteListener);
   }
 
   if (frameWindow?.cppWebBridge) {
@@ -404,6 +557,7 @@ function detachFrameIntegration() {
   }
 
   cppWebReadyListener = null;
+  cppWebPasteListener = null;
 }
 
 function handleEditorFrameLoad() {
@@ -419,8 +573,19 @@ function handleEditorFrameLoad() {
   cppWebReadyListener = () => {
     handleCppWebReady();
   };
+  cppWebPasteListener = (event) => {
+    const detail = (event as CustomEvent<{ text?: unknown }>).detail;
+    const text = typeof detail?.text === "string" ? detail.text : "";
+
+    if (!text) {
+      return;
+    }
+
+    applyPastedText(text);
+  };
 
   frameWindow.addEventListener("cpp-web-ready", cppWebReadyListener);
+  frameWindow.addEventListener("cpp-web-paste-text", cppWebPasteListener);
 
   if (frameWindow.cppWebBridge) {
     frameWindow.cppWebBridge.onContentChanged = (content) => {
@@ -472,13 +637,21 @@ function showSimulationOutputInEditor(content: string) {
 function stopSimulation() {
   projectSimulator?.stop();
   restoreSourceContentInEditor();
+  simulationStatus.value = "idle";
   emit("statusChange", "idle");
 }
 
 async function startSimulation() {
+  if (!canStartSimulation.value) {
+    return;
+  }
+
+  simulationError.value = "";
+  simulationStatus.value = "starting";
   emit("statusChange", "starting");
 
   try {
+    pushContentToBridge(sourceContent);
     await props.flushDraft();
     const catalog = await loadModelCatalogFromDraft(props.projectId);
 
@@ -488,10 +661,16 @@ async function startSimulation() {
     });
 
     await projectSimulator.start();
+    simulationStatus.value = "running";
     emit("statusChange", "running");
   } catch (error) {
     destroyProjectSimulator();
     restoreSourceContentInEditor();
+    simulationStatus.value = "idle";
+    simulationError.value =
+      error instanceof Error
+        ? error.message
+        : "The simulator could not start from the current IndexedDB draft.";
     emit("statusChange", "idle");
     emit(
       "error",
@@ -505,6 +684,7 @@ async function startSimulation() {
 function cleanup() {
   destroyProjectSimulator();
   restoreSourceContentInEditor();
+  simulationStatus.value = "idle";
   emit("statusChange", "idle");
 }
 
@@ -519,14 +699,57 @@ function destroy() {
 }
 
 function focus() {
-  const bridge = getBridge();
-
-  if (bridge?.isReady) {
-    bridge.focus();
+  if (sourceTextareaElement.value) {
+    sourceTextareaElement.value.focus();
     return;
   }
 
-  editorFrameElement.value?.focus();
+  getBridge()?.focus();
+}
+
+function canAcceptPastedText() {
+  return editorReady.value && simulationOutput.value === null;
+}
+
+function applyPastedText(text: string) {
+  if (!text || !canAcceptPastedText()) {
+    return;
+  }
+
+  insertText(text);
+  focus();
+}
+
+function getSourceTextareaCursorIndex() {
+  const textarea = sourceTextareaElement.value;
+
+  if (!textarea) {
+    return sourceCursorIndex;
+  }
+
+  return textarea.selectionStart ?? textarea.value.length;
+}
+
+function handleSourceTextareaInput(event: Event) {
+  const target = event.target;
+
+  if (!(target instanceof HTMLTextAreaElement) || simulationOutput.value !== null) {
+    return;
+  }
+
+  commitSourceContent(target.value, target.selectionStart ?? target.value.length);
+  pushContentToBridge(target.value);
+}
+
+function handleSourceTextareaSelection() {
+  if (simulationOutput.value !== null) {
+    return;
+  }
+
+  sourceCursorIndex = getSourceTextareaCursorIndex();
+  trackedCursorIndex = sourceCursorIndex;
+  updateSourceSnapshot();
+  emit("snapshotChange", editorSnapshot.value);
 }
 
 function getContent() {
@@ -539,18 +762,26 @@ function getSnapshot() {
 
 function insertText(text: string) {
   const content = getContent();
+  const nextCursorIndex = sourceCursorIndex + text.length;
   const nextContent =
     content.slice(0, sourceCursorIndex) +
     text +
     content.slice(sourceCursorIndex);
 
-  sourceCursorIndex += text.length;
-  setContent(nextContent);
+  if (simulationOutput.value !== null) {
+    return;
+  }
+
+  commitSourceContent(nextContent, nextCursorIndex);
+  pushContentToBridge(nextContent);
+
+  sourceTextareaElement.value?.setSelectionRange(nextCursorIndex, nextCursorIndex);
 }
 
 function setContent(content: string) {
   sourceContent = content;
   sourceCursorIndex = content.length;
+  syncSourceText(content);
 
   if (simulationOutput.value !== null) {
     updateSourceSnapshot();
@@ -598,14 +829,82 @@ defineExpose<EditorHandle & {
 <style scoped>
 .drawing-2d {
   display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   position: relative;
 }
 
+.drawing-2d__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.35rem;
+  padding: 0 0 0.75rem;
+  flex: 0 0 auto;
+}
+
+.drawing-2d__toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.drawing-2d__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0 0.65rem;
+  border: 1px solid #d0d7de;
+  border-radius: 0.45rem;
+  background: #ffffff;
+  color: #24292f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.drawing-2d__button:hover:not(:disabled) {
+  border-color: rgba(9, 105, 218, 0.35);
+  background: rgba(9, 105, 218, 0.06);
+  color: #0969da;
+}
+
+.drawing-2d__button--accent {
+  border-color: rgba(9, 105, 218, 0.35);
+  background: rgba(9, 105, 218, 0.1);
+  color: #0969da;
+}
+
+.drawing-2d__button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.drawing-2d__error {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
 .drawing-2d__surface {
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(20rem, 0.9fr);
+  gap: 1rem;
   flex: 1 1 auto;
+  min-height: 0;
+}
+
+.drawing-2d__canvas-pane,
+.drawing-2d__source-pane {
+  position: relative;
+  min-width: 0;
   min-height: 0;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 1rem;
@@ -617,7 +916,55 @@ defineExpose<EditorHandle & {
   overflow: hidden;
 }
 
+.drawing-2d__canvas-pane {
+  display: flex;
+  min-height: 0;
+}
+
+.drawing-2d__source-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem;
+}
+
+.drawing-2d__source-header {
+  color: #57606a;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drawing-2d__source-input {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.8rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.9rem 1rem;
+  resize: none;
+  outline: none;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre;
+  overflow: auto;
+}
+
+.drawing-2d__source-input:focus {
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.12);
+}
+
+.drawing-2d__source-input:read-only {
+  opacity: 0.8;
+}
+
 .drawing-2d__frame {
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   border: 0;
@@ -636,5 +983,46 @@ defineExpose<EditorHandle & {
   font-weight: 600;
   letter-spacing: 0;
   pointer-events: none;
+}
+
+.drawing-2d__statusbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 2rem;
+  padding: 0.55rem 0 0;
+  flex: 0 0 auto;
+  color: #57606a;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.74rem;
+}
+
+.drawing-2d__status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.drawing-2d__status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #1a7f37;
+  box-shadow: 0 0 0.55rem rgba(26, 127, 55, 0.3);
+}
+
+@media (max-width: 1080px) {
+  .drawing-2d__surface {
+    grid-template-columns: 1fr;
+  }
+
+  .drawing-2d__canvas-pane {
+    min-height: 24rem;
+  }
+
+  .drawing-2d__source-pane {
+    min-height: 16rem;
+  }
 }
 </style>
