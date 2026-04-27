@@ -39,7 +39,7 @@ export interface SignedProjectDownloadResponse {
   storage_uri: string;
 }
 
-export interface ProjectSaveToDrivePrepareRequest {
+export interface ProjectSaveToCloudPrepareRequest {
   content_checksum: string;
   content_length: number;
   content_type: string;
@@ -49,14 +49,14 @@ export interface ProjectSaveToDrivePrepareRequest {
   title: string;
 }
 
-export interface ProjectSaveToDrivePrepareResponse {
+export interface ProjectSaveToCloudPrepareResponse {
   needs_upload: boolean;
   project: ProjectResponse | null;
   project_id: string;
   upload: SignedProjectUploadResponse | null;
 }
 
-export interface ProjectSaveToDriveCompleteRequest {
+export interface ProjectSaveToCloudCompleteRequest {
   content_checksum: string;
   content_length: number;
   content_type: string;
@@ -144,10 +144,10 @@ export async function deleteProject(projectId: string): Promise<void> {
   });
 }
 
-export async function prepareProjectSaveToDrive(
-  payload: ProjectSaveToDrivePrepareRequest,
-): Promise<ProjectSaveToDrivePrepareResponse> {
-  return requestJson<ProjectSaveToDrivePrepareResponse>("/api/projects/save-to-drive/prepare", {
+export async function prepareProjectSaveToCloud(
+  payload: ProjectSaveToCloudPrepareRequest,
+): Promise<ProjectSaveToCloudPrepareResponse> {
+  return requestJson<ProjectSaveToCloudPrepareResponse>("/api/projects/save-to-cloud/prepare", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -156,10 +156,10 @@ export async function prepareProjectSaveToDrive(
   });
 }
 
-export async function completeProjectSaveToDrive(
-  payload: ProjectSaveToDriveCompleteRequest,
+export async function completeProjectSaveToCloud(
+  payload: ProjectSaveToCloudCompleteRequest,
 ): Promise<ProjectResponse> {
-  return requestJson<ProjectResponse>("/api/projects/save-to-drive/complete", {
+  return requestJson<ProjectResponse>("/api/projects/save-to-cloud/complete", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

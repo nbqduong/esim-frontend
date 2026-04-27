@@ -20,12 +20,12 @@
         </button>
 
         <SystemMenu
-          :save-disabled="isSaveToDriveDisabled"
+          :save-disabled="isSaveToCloudDisabled"
           :save-label="saveButtonLabel"
           :status-label="cloudStatusLabel"
           :title="title"
           @file="handleMenuFile"
-          @save="handleSaveToDrive"
+          @save="handleSaveToCloud"
           @settings="navigateSettings"
         />
 
@@ -81,8 +81,8 @@
         <button
           class="project-create__save-button"
           type="button"
-          :disabled="isSaveToDriveDisabled"
-          @click="handleSaveToDrive"
+          :disabled="isSaveToCloudDisabled"
+          @click="handleSaveToCloud"
         >
           <span
             class="project-create__save-icon"
@@ -167,10 +167,10 @@ import type {
 } from "@/features/project-create/editor/editor-host";
 import { buildProjectArchive, parseProjectArchive } from "@/lib/project-content";
 import {
-  completeProjectSaveToDrive,
+  completeProjectSaveToCloud,
   deleteProject,
   downloadProjectArchive,
-  prepareProjectSaveToDrive,
+  prepareProjectSaveToCloud,
   ProjectLimitError,
   RateLimitError,
   syncProject,
@@ -360,16 +360,16 @@ const hasUnsyncedCloudChanges = computed(() => {
 
 const cloudStatusLabel = computed(() => {
   if (cloudSaveState.value === "saving") {
-    return "DRIVE SAVING";
+    return "CLOUD SAVING";
   }
   if (cloudSaveState.value === "error") {
-    return "DRIVE ERROR";
+    return "CLOUD ERROR";
   }
   if (hasUnsyncedCloudChanges.value) {
     return "LOCAL CHANGES";
   }
   if (routeProjectId.value ?? currentDraft.value.projectId) {
-    return "DRIVE SYNCED";
+    return "CLOUD SYNCED";
   }
   return "LOCAL ONLY";
 });
@@ -381,12 +381,12 @@ const saveButtonLabel = computed(() => {
   if (cloudSaveState.value === "error") {
     return "Retry Save";
   }
-  return "Save to Drive";
+  return "Save to Cloud";
 });
 
 const deleteButtonLabel = computed(() => (isDeletingProject.value ? "Deleting..." : "Delete"));
 
-const isSaveToDriveDisabled = computed(
+const isSaveToCloudDisabled = computed(
   () =>
     !editorReady.value ||
     cloudSaveState.value === "saving" ||
@@ -561,7 +561,7 @@ function enqueueCloudAutoSave(saveVersion: number, options: CloudAutoSaveOptions
         return;
       }
 
-      await saveProjectToDrive({ replaceRoute: options.replaceRoute });
+      await saveProjectToCloud({ replaceRoute: options.replaceRoute });
     });
 }
 
@@ -740,11 +740,11 @@ async function hydrateCurrentRoute() {
   }
 }
 
-type DriveSaveOptions = {
+type CloudSaveOptions = {
   replaceRoute?: boolean;
 };
 
-async function saveProjectToDrive(options: DriveSaveOptions = {}) {
+async function saveProjectToCloud(options: CloudSaveOptions = {}) {
   const replaceRoute = options.replaceRoute ?? true;
   const previousDraftId = currentDraft.value.id;
   if (!isComponentDisposed) {
@@ -763,7 +763,7 @@ async function saveProjectToDrive(options: DriveSaveOptions = {}) {
     latestEditorContent = content;
     const archive = await buildProjectArchive(content);
     const activeProjectId = currentDraft.value.projectId ?? undefined;
-    const prepareResponse = await prepareProjectSaveToDrive({
+    const prepareResponse = await prepareProjectSaveToCloud({
       content_checksum: archive.checksum,
       content_length: archive.contentLength,
       content_type: archive.contentType,
@@ -781,7 +781,7 @@ async function saveProjectToDrive(options: DriveSaveOptions = {}) {
     }
 
     const savedProject = prepareResponse.needs_upload
-      ? await completeProjectSaveToDrive({
+      ? await completeProjectSaveToCloud({
           content_checksum: archive.checksum,
           content_length: archive.contentLength,
           content_type: archive.contentType,
@@ -843,7 +843,7 @@ async function saveProjectToDrive(options: DriveSaveOptions = {}) {
         cloudSaveState.value = "error";
       }
     } else {
-      console.error("Failed to save the project to Drive", error);
+      console.error("Failed to save the project to Cloud", error);
       if (!isComponentDisposed) {
         cloudSaveState.value = "error";
       }
@@ -851,8 +851,8 @@ async function saveProjectToDrive(options: DriveSaveOptions = {}) {
   }
 }
 
-async function handleSaveToDrive() {
-  await saveProjectToDrive();
+async function handleSaveToCloud() {
+  await saveProjectToCloud();
 }
 
 async function handleDeleteProject() {

@@ -35,7 +35,7 @@ async function loadSections() {
         id: project.id,
         subtitle: project.content_updated_at
           ? `Checksum ${project.content_checksum?.slice(0, 12) ?? "pending"}`
-          : "Stored in Drive",
+          : "Stored in Cloud",
         title: project.title,
         to: {
           name: "Project Detail",
