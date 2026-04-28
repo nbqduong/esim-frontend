@@ -10,7 +10,7 @@
 import CatalogCreateCard from "@/components/catalog/CatalogCreateCard.vue";
 import CatalogPage from "@/components/catalog/CatalogPage.vue";
 import type { CatalogSection } from "@/components/catalog/types";
-import { listProjects } from "@/lib/projects";
+import { createCloudStorage } from "@/lib/outer-data/project-manager";
 import { onMounted, ref } from "vue";
 
 defineOptions({ name: "Project" });
@@ -27,25 +27,26 @@ const fallbackSections: CatalogSection[] = [
 ];
 
 async function loadSections() {
-  const response = await listProjects();
+  const storage = createCloudStorage();
+  const response = await storage.list();
   sections.value = [
     {
       title: "Recent projects",
       items: response.projects.map((project) => ({
-        id: project.id,
-        subtitle: project.content_updated_at
-          ? `Checksum ${project.content_checksum?.slice(0, 12) ?? "pending"}`
+        id: project.projectId,
+        subtitle: project.contentUpdatedAt
+          ? `Checksum ${project.contentChecksum?.slice(0, 12) ?? "pending"}`
           : "Stored in Cloud",
         title: project.title,
         to: {
           name: "Project Detail",
           params: {
-            projectId: project.id,
+            projectId: project.projectId,
           },
         },
-        updatedLabel: project.content_updated_at
-          ? `Updated ${new Date(project.content_updated_at).toLocaleString()}`
-          : `Created ${new Date(project.created_at).toLocaleString()}`,
+        updatedLabel: project.contentUpdatedAt
+          ? `Updated ${new Date(project.contentUpdatedAt).toLocaleString()}`
+          : `Created ${new Date(project.createdAt).toLocaleString()}`,
       })),
     },
   ];

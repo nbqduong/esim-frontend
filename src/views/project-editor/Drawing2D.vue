@@ -84,12 +84,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import { loadModelCatalogFromDraft } from "@/data/data-loader";
+import { loadModelCatalogFromDraft } from "@/lib/browser-data/indexDB-data-validator";
 import type {
   EditorHandle,
   EditorSnapshot,
 } from "@/features/project-create/editor/editor-host";
-import { createProjectSimulator, type ProjectSimulator } from "@/lib/project-simulator";
+import { createProjectSimulator, type ProjectSimulator } from "@/lib/outer-data/project-simulator";
 
 type SimulationStatus = "idle" | "running" | "starting";
 

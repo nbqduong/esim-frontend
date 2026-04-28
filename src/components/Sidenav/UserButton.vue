@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { backendUrl } from '@/lib/backend';
+import { backendUrl } from '@/lib/outer-data/backend';
 
 defineProps<{
   isMiniSidebar: boolean;

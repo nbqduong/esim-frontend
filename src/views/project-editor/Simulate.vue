@@ -55,8 +55,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 
-import { loadModelCatalogFromIndexedDB } from "@/data/modelCatalogDatabase";
+import { loadModelCatalogFromIndexedDB } from "@/lib/browser-data/indexBD-manager";
 import {
   create3DViewer,
   type ModelCatalog,
@@ -66,9 +67,6 @@ import { createStateLoader, type StateLoader } from "@/features/project-create/t
 
 type SimulationStatus = "error" | "idle" | "paused" | "running";
 
-const props = defineProps<{
-  catalogLoader?: () => Promise<ModelCatalog>;
-}>();
 
 const emit = defineEmits<{
   stateChange: [
@@ -95,11 +93,15 @@ const isBusy = ref(false);
 const simulationStatus = ref<SimulationStatus>("idle");
 const errorMessage = ref("");
 const loadedCatalog = ref<ModelCatalog | null>(null);
-const sourceLabel = computed(() =>
-  props.catalogLoader ? "Current draft" : "IndexedDB",
-);
+const sourceLabel = "IndexedDB";
+const route = useRoute();
+const routeProjectId = computed(() => {
+  const param = route.params.projectId;
+  return typeof param === "string" ? param : null;
+});
+
 const loadingMessage = computed(
-  () => `Loading model catalog from ${sourceLabel.value.toLowerCase()}...`,
+  () => `Loading model catalog from ${sourceLabel.toLowerCase()}...`,
 );
 
 const startPauseLabel = computed(() =>
@@ -135,7 +137,7 @@ const catalogSummary = computed(() => {
     0,
   );
 
-  return `${catalog.length} models and ${objectCount} objects loaded from ${sourceLabel.value.toLowerCase()}.`;
+  return `${catalog.length} models and ${objectCount} objects loaded from ${sourceLabel.toLowerCase()}.`;
 });
 
 const canStartPause = computed(
@@ -162,7 +164,7 @@ function emitStateChange() {
     catalogSummary: catalogSummary.value,
     errorMessage: errorMessage.value,
     loadingMessage: loadingMessage.value,
-    sourceLabel: sourceLabel.value,
+    sourceLabel: sourceLabel,
     simulationStatus: simulationStatus.value,
     startPauseLabel: startPauseLabel.value,
     statusLabel: statusLabel.value,
@@ -221,9 +223,7 @@ const initializeScreen = async (): Promise<void> => {
   }
 
   try {
-    const catalog = props.catalogLoader
-      ? await props.catalogLoader()
-      : await loadModelCatalogFromIndexedDB();
+    const catalog = await loadModelCatalogFromIndexedDB(routeProjectId.value);
 
     if (destroyed) {
       return;
@@ -252,9 +252,7 @@ const initializeScreen = async (): Promise<void> => {
   } catch (error) {
     console.error("Unable to initialize the simulation screen", error);
     simulationStatus.value = "error";
-    errorMessage.value = props.catalogLoader
-      ? "The simulation screen could not load the current project draft."
-      : "The simulation screen could not load the catalog from IndexedDB.";
+    errorMessage.value = "The simulation screen could not load the catalog from IndexedDB.";
   } finally {
     if (!destroyed) {
       catalogLoading.value = false;

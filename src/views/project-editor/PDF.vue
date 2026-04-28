@@ -69,20 +69,23 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { loadModelCatalogFromIndexedDB } from "@/data/modelCatalogDatabase";
+import { useRoute } from "vue-router";
+import { loadModelCatalogFromIndexedDB } from "@/lib/browser-data/indexBD-manager";
 import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
 
-const props = defineProps<{
-  catalogLoader?: () => Promise<ModelCatalog>;
-}>();
 
 const catalog = ref<ModelCatalog | null>(null);
 const errorMessage = ref("");
 const loading = ref(true);
-const sourceLabel = computed(() =>
-  props.catalogLoader ? "Current draft" : "IndexedDB"
-);
-const loadingMessage = computed(() => `Loading document data from ${sourceLabel.value}...`);
+const sourceLabel = "IndexedDB";
+
+const route = useRoute();
+const routeProjectId = computed(() => {
+  const param = route.params.projectId;
+  return typeof param === "string" ? param : null;
+});
+
+const loadingMessage = computed(() => `Loading document data from ${sourceLabel}...`);
 
 const summary = computed(() => {
   if (!catalog.value) {
@@ -94,21 +97,17 @@ const summary = computed(() => {
     0
   );
 
-  return `${catalog.value.length} models and ${objectCount} objects are included in this PDF preview from ${sourceLabel.value.toLowerCase()}.`;
+  return `${catalog.value.length} models and ${objectCount} objects are included in this PDF preview from ${sourceLabel.toLowerCase()}.`;
 });
 
 onMounted(() => {
-  const loadCatalog = props.catalogLoader ?? loadModelCatalogFromIndexedDB;
-
-  void loadCatalog()
+  void loadModelCatalogFromIndexedDB(routeProjectId.value)
     .then((nextCatalog) => {
       catalog.value = nextCatalog;
     })
     .catch((error) => {
       console.error("Unable to load the PDF catalog", error);
-      errorMessage.value = props.catalogLoader
-        ? "The PDF screen could not load the current project draft."
-        : "The PDF screen could not load the catalog from IndexedDB.";
+      errorMessage.value = "The PDF screen could not load the catalog from IndexedDB.";
     })
     .finally(() => {
       loading.value = false;

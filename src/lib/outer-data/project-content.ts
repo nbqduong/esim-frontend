@@ -141,7 +141,7 @@ function readStoredZipArchive(archiveBytes: Uint8Array): Uint8Array {
   );
 
   if (entryName !== ZIP_ENTRY_NAME) {
-    throw new Error("Unexpected project archive entry.");
+    throw new Error(`Unexpected project archive entry: "${entryName}". Expected "${ZIP_ENTRY_NAME}".`);
   }
 
   return archiveBytes.slice(contentOffset, contentOffset + contentLength);

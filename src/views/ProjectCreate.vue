@@ -79,6 +79,32 @@
           <span>{{ deleteButtonLabel }}</span>
         </button>
         <button
+          class="project-create__export-button"
+          type="button"
+          :disabled="!editorReady"
+          @click="handleImportFromLocal"
+        >
+          <span
+            class="project-create__save-icon"
+            aria-hidden="true"
+            v-html="iconMarkup('upload')"
+          ></span>
+          <span>Import</span>
+        </button>
+        <button
+          class="project-create__export-button"
+          type="button"
+          :disabled="!editorReady"
+          @click="handleExportToLocal"
+        >
+          <span
+            class="project-create__save-icon"
+            aria-hidden="true"
+            v-html="iconMarkup('download')"
+          ></span>
+          <span>Export</span>
+        </button>
+        <button
           class="project-create__save-button"
           type="button"
           :disabled="isSaveToCloudDisabled"
@@ -147,37 +173,36 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import SystemMenu from "@/components/project/system-menu.vue";
-import { parseModelCatalog } from "@/data/data-loader";
+
 import {
-  canUseProjectDraftStorage,
-  createEmptyProjectDraft,
-  deleteProjectDraft,
-  getProjectDraftId,
-  loadProjectDraft,
-  saveProjectDraft,
-  type ProjectDraftRecord,
-  type ProjectDraftSyncState,
-} from "@/data/project-loader";
+  canManageProjectDrafts,
+  createManagedProjectDraft,
+  deleteManagedProjectDraftByProjectId,
+  loadManagedProjectDraft,
+  replaceManagedProjectDraft,
+  saveManagedProjectDraft,
+} from "@/lib/browser-data/indexBD-manager";
+import type {
+  ProjectDraftRecord,
+  ProjectDraftSyncState,
+} from "@/lib/browser-data/indexDB-interface";
 import type {
   EditorHandle,
   EditorSnapshot,
 } from "@/features/project-create/editor/editor-host";
-import { buildProjectArchive, parseProjectArchive } from "@/lib/project-content";
+import { buildProjectArchive } from "@/lib/outer-data/project-content";
 import {
-  completeProjectSaveToCloud,
-  deleteProject,
-  downloadProjectArchive,
-  prepareProjectSaveToCloud,
+  createCloudStorage,
+  createLocalStorage,
   ProjectLimitError,
+  type ProjectStorage,
   RateLimitError,
-  syncProject,
-  uploadProjectArchive,
-} from "@/lib/projects";
-import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
-import CSVView from "@/views/CSV.vue";
-import Drawing2D from "@/views/Drawing2D.vue";
-import PDFView from "@/views/PDF.vue";
-import SimulateView from "@/views/Simulate.vue";
+} from "@/lib/outer-data/project-manager";
+
+import CSVView from "@/views/project-editor/CSV.vue";
+import Drawing2D from "@/views/project-editor/Drawing2D.vue";
+import PDFView from "@/views/project-editor/PDF.vue";
+import SimulateView from "@/views/project-editor/Simulate.vue";
 
 defineOptions({ name: "ProjectCreate" });
 
@@ -230,6 +255,22 @@ function iconMarkup(name: string) {
           <path d="M10 10.25v5.5M14 10.25v5.5" />
         </svg>
       `;
+    case "download":
+      return `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4.75v10.5" />
+          <path d="m8.5 12.25 3.5 3.5 3.5-3.5" />
+          <path d="M4.75 18.25h14.5" />
+        </svg>
+      `;
+    case "upload":
+      return `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 15.25V4.75" />
+          <path d="m8.5 7.75 3.5-3.5 3.5 3.5" />
+          <path d="M4.75 18.25h14.5" />
+        </svg>
+      `;
     default:
       return "";
   }
@@ -263,9 +304,10 @@ const editorSnapshot = ref<EditorSnapshot>(defaultSnapshot);
 const activeWorkspaceView = ref<WorkspaceView>("drawing");
 const drawing2DHandle = ref<Drawing2DHandle | null>(null);
 const drawingSimulationStatus = ref<DrawingSimulationStatus>("idle");
-const currentDraft = ref<ProjectDraftRecord>(createEmptyProjectDraft(routeProjectId.value));
+const currentDraft = ref<ProjectDraftRecord>(createManagedProjectDraft(routeProjectId.value));
 const activeProjectId = computed(() => currentDraft.value.projectId ?? routeProjectId.value);
-const draftStorageEnabled = canUseProjectDraftStorage();
+const draftStorageEnabled = canManageProjectDrafts();
+const projectStorage: ProjectStorage = createCloudStorage();
 const draftSaveState = ref<DraftSaveState>(draftStorageEnabled ? "idle" : "unsupported");
 const cloudSaveState = ref<CloudSaveState>("idle");
 const isDeletingProject = ref(false);
@@ -458,7 +500,7 @@ async function buildPersistedDraft(
   const nextDraft: ProjectDraftRecord = {
     ...currentDraft.value,
     content,
-    id: getProjectDraftId(projectId),
+    id: currentDraft.value.id,
     localChecksum: archive.checksum,
     projectId,
     syncState: "idle",
@@ -479,8 +521,7 @@ function enqueueDraftSave(saveVersion: number) {
     .then(async () => {
       const content = editorHandle.value?.getContent() ?? latestEditorContent;
       const nextDraft = await buildPersistedDraft(content, title.value);
-      const savedDraft = await saveProjectDraft(nextDraft);
-      const nextCurrentDraft = savedDraft ?? nextDraft;
+      const nextCurrentDraft = await saveManagedProjectDraft(nextDraft);
 
       if (isComponentDisposed) {
         return;
@@ -644,33 +685,34 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 
 async function loadDraftForRoute(projectId: string | null): Promise<ProjectDraftRecord> {
   let draft = draftStorageEnabled
-    ? await loadProjectDraft(projectId)
+    ? await loadManagedProjectDraft(projectId)
     : null;
-  draft ??= createEmptyProjectDraft(projectId);
+  draft ??= createManagedProjectDraft(projectId);
 
   if (!projectId) {
     draft.syncState = getDraftSyncState(draft);
     return draft;
   }
 
-  const syncResponse = await syncProject(projectId, draft.localChecksum);
+  const syncResult = await projectStorage.sync({
+    projectId,
+    localChecksum: draft.localChecksum,
+  });
 
-  if (syncResponse.needs_download && syncResponse.download) {
-    const archiveBuffer = await downloadProjectArchive(syncResponse.download);
-    const parsedArchive = await parseProjectArchive(archiveBuffer);
+  if (syncResult.needsSync && syncResult.content !== null) {
     const downloadedDraft: ProjectDraftRecord = {
-      content: parsedArchive.content,
-      id: getProjectDraftId(syncResponse.project.id),
-      lastSyncedChecksum: syncResponse.project.content_checksum ?? parsedArchive.checksum,
-      lastSyncedTitle: syncResponse.project.title,
-      localChecksum: syncResponse.project.content_checksum ?? parsedArchive.checksum,
-      projectId: syncResponse.project.id,
+      content: syncResult.content,
+      id: createManagedProjectDraft(syncResult.projectId).id,
+      lastSyncedChecksum: syncResult.contentChecksum ?? syncResult.checksum,
+      lastSyncedTitle: syncResult.title,
+      localChecksum: syncResult.contentChecksum ?? syncResult.checksum,
+      projectId: syncResult.projectId,
       syncState: "synced",
-      title: syncResponse.project.title,
+      title: syncResult.title,
       updatedAt: Date.now(),
     };
     if (draftStorageEnabled) {
-      await saveProjectDraft(downloadedDraft);
+      return saveManagedProjectDraft(downloadedDraft);
     }
     return downloadedDraft;
   }
@@ -678,17 +720,17 @@ async function loadDraftForRoute(projectId: string | null): Promise<ProjectDraft
   const wasLocallyDirty = isDraftDirty(draft);
   const syncedDraft: ProjectDraftRecord = {
     ...draft,
-    id: getProjectDraftId(syncResponse.project.id),
-    lastSyncedChecksum: syncResponse.project.content_checksum,
-    lastSyncedTitle: syncResponse.project.title,
-    projectId: syncResponse.project.id,
-    title: wasLocallyDirty ? draft.title : syncResponse.project.title,
+    id: createManagedProjectDraft(syncResult.projectId).id,
+    lastSyncedChecksum: syncResult.contentChecksum,
+    lastSyncedTitle: syncResult.title,
+    projectId: syncResult.projectId,
+    title: wasLocallyDirty ? draft.title : syncResult.title,
     updatedAt: Date.now(),
   };
   syncedDraft.syncState = getDraftSyncState(syncedDraft);
 
   if (draftStorageEnabled) {
-    await saveProjectDraft(syncedDraft);
+    return saveManagedProjectDraft(syncedDraft);
   }
 
   return syncedDraft;
@@ -750,73 +792,44 @@ async function saveProjectToCloud(options: CloudSaveOptions = {}) {
 
     const content = editorHandle.value?.getContent() ?? latestEditorContent;
     latestEditorContent = content;
-    const archive = await buildProjectArchive(content);
-    const activeProjectId = currentDraft.value.projectId ?? undefined;
-    const prepareResponse = await prepareProjectSaveToCloud({
-      content_checksum: archive.checksum,
-      content_length: archive.contentLength,
-      content_type: archive.contentType,
-      description: "",
-      metadata_json: {},
-      project_id: activeProjectId,
+
+    const result = await projectStorage.save({
+      content,
       title: normalizedTitle,
+      description: "",
+      projectId: currentDraft.value.projectId ?? undefined,
     });
-
-    if (prepareResponse.needs_upload) {
-      if (!prepareResponse.upload) {
-        throw new Error("The backend did not return a signed upload URL.");
-      }
-      await uploadProjectArchive(prepareResponse.upload, archive.archiveBlob);
-    }
-
-    const savedProject = prepareResponse.needs_upload
-      ? await completeProjectSaveToCloud({
-          content_checksum: archive.checksum,
-          content_length: archive.contentLength,
-          content_type: archive.contentType,
-          description: "",
-          metadata_json: {},
-          project_id: prepareResponse.project_id,
-          title: normalizedTitle,
-        })
-      : prepareResponse.project;
-
-    if (!savedProject) {
-      throw new Error("The backend did not return project metadata.");
-    }
 
     const syncedDraft: ProjectDraftRecord = {
       content,
-      id: getProjectDraftId(savedProject.id),
-      lastSyncedChecksum: archive.checksum,
-      lastSyncedTitle: savedProject.title,
-      localChecksum: archive.checksum,
-      projectId: savedProject.id,
+      id: createManagedProjectDraft(result.projectId).id,
+      lastSyncedChecksum: result.checksum,
+      lastSyncedTitle: result.title,
+      localChecksum: result.checksum,
+      projectId: result.projectId,
       syncState: "synced",
       title: normalizedTitle,
       updatedAt: Date.now(),
     };
 
+    let persistedDraft = syncedDraft;
     if (draftStorageEnabled) {
-      await saveProjectDraft(syncedDraft);
-      if (previousDraftId !== syncedDraft.id) {
-        await deleteProjectDraft(previousDraftId);
-      }
+      persistedDraft = await replaceManagedProjectDraft(previousDraftId, syncedDraft);
     }
 
     if (isComponentDisposed) {
       return;
     }
 
-    currentDraft.value = syncedDraft;
+    currentDraft.value = persistedDraft;
     draftSaveState.value = draftStorageEnabled ? "saved" : draftSaveState.value;
     cloudSaveState.value = "synced";
 
-    if (replaceRoute && routeProjectId.value !== savedProject.id) {
+    if (replaceRoute && routeProjectId.value !== result.projectId) {
       await router.replace({
         name: "Project Detail",
         params: {
-          projectId: savedProject.id,
+          projectId: result.projectId,
         },
       });
     }
@@ -844,6 +857,50 @@ async function handleSaveToCloud() {
   await saveProjectToCloud();
 }
 
+async function handleExportToLocal() {
+  try {
+    await flushPendingDraftSave();
+    const content = editorHandle.value?.getContent() ?? latestEditorContent;
+    const normalizedTitle = getEffectiveTitle(title.value);
+    const localExporter = createLocalStorage();
+
+    await localExporter.save({
+      content,
+      title: normalizedTitle,
+      description: "",
+    });
+  } catch (error) {
+    console.error("Failed to export the project locally", error);
+    showCloudToast("Failed to download the project file.");
+  }
+}
+
+async function handleImportFromLocal() {
+  try {
+    const localImporter = createLocalStorage();
+    const result = await localImporter.load({ projectId: "" });
+
+    // Apply the loaded content to the editor.
+    title.value = result.title;
+    latestEditorContent = result.content;
+
+    if (editorHandle.value) {
+      editorHandle.value.setContent(result.content);
+      editorSnapshot.value = editorHandle.value.getSnapshot();
+    }
+
+    // Save to IndexedDB so the other views can pick it up.
+    scheduleDraftSave(result.content);
+  } catch (error) {
+    // The user cancelling the file picker is not a real error.
+    if (error instanceof Error && error.message.includes("cancelled")) {
+      return;
+    }
+    console.error("Failed to import the project", error);
+    showCloudToast("Failed to import the project file.");
+  }
+}
+
 async function handleDeleteProject() {
   const projectId = activeProjectId.value;
   if (!projectId) {
@@ -858,9 +915,9 @@ async function handleDeleteProject() {
   isDeletingProject.value = true;
 
   try {
-    await deleteProject(projectId);
+    await projectStorage.remove(projectId);
     if (draftStorageEnabled) {
-      await deleteProjectDraft(getProjectDraftId(projectId));
+      await deleteManagedProjectDraftByProjectId(projectId);
     }
     cloudToast.value = null;
     await router.replace({ name: "Project" });
@@ -917,7 +974,7 @@ onMounted(async () => {
     console.error("Failed to load the initial project draft", error);
     cloudSaveState.value = "error";
     draftSaveState.value = draftStorageEnabled ? "error" : "unsupported";
-    return createEmptyProjectDraft(routeProjectId.value);
+    return createManagedProjectDraft(routeProjectId.value);
   });
 
   await applyDraft(initialDraft);
@@ -1181,6 +1238,37 @@ onBeforeUnmount(() => {
 }
 
 .project-create__save-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.project-create__export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.1rem;
+  padding: 0 0.9rem;
+  border: 1px solid rgba(130, 80, 223, 0.2);
+  border-radius: 0.7rem;
+  background: rgba(130, 80, 223, 0.08);
+  color: #7c3aed;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.project-create__export-button:hover:not(:disabled) {
+  background: rgba(130, 80, 223, 0.12);
+  border-color: rgba(130, 80, 223, 0.28);
+  transform: translateY(-1px);
+}
+
+.project-create__export-button:disabled {
   opacity: 0.65;
   cursor: default;
 }

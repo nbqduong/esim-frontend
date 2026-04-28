@@ -1,4 +1,4 @@
-import { loadProjectDraft } from "@/data/project-loader";
+import { loadProjectDraft } from "@/lib/browser-data/indexDB-interface";
 import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
 import { LED_OFF_STATE, LED_ON_STATE } from "@/features/project-create/three/stateCodec";
 

@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { backendUrl } from '@/lib/backend';
+import { backendUrl } from '@/lib/outer-data/backend';
 
 const isAuthenticated = ref(false);
 const loading = ref(true);

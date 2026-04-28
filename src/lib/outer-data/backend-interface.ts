@@ -1,4 +1,4 @@
-import { backendUrl } from "@/lib/backend";
+import { backendUrl } from "@/lib/outer-data/backend";
 
 export interface ProjectResponse {
   content_checksum: string | null;
@@ -88,17 +88,10 @@ async function parseError(response: Response): Promise<string> {
   return `${response.status} ${response.statusText}`.trim();
 }
 
-export class RateLimitError extends Error {
-  constructor(message: string) {
+export class BackendApiError extends Error {
+  constructor(public status: number, message: string) {
     super(message);
-    this.name = "RateLimitError";
-  }
-}
-
-export class ProjectLimitError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ProjectLimitError";
+    this.name = "BackendApiError";
   }
 }
 
@@ -110,13 +103,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const message = await parseError(response);
-    if (response.status === 429) {
-      throw new RateLimitError(message);
-    }
-    if (response.status === 409) {
-      throw new ProjectLimitError(message);
-    }
-    throw new Error(message);
+    throw new BackendApiError(response.status, message);
   }
 
   return (await response.json()) as T;
@@ -130,7 +117,7 @@ async function requestEmpty(path: string, init?: RequestInit): Promise<void> {
 
   if (!response.ok) {
     const message = await parseError(response);
-    throw new Error(message);
+    throw new BackendApiError(response.status, message);
   }
 }
 

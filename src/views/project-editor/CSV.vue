@@ -53,7 +53,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { loadModelCatalogFromIndexedDB } from "@/data/modelCatalogDatabase";
+import { useRoute } from "vue-router";
+import { loadModelCatalogFromIndexedDB } from "@/lib/browser-data/indexBD-manager";
 import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
 
 interface CatalogRow {
@@ -64,17 +65,19 @@ interface CatalogRow {
   state: string;
 }
 
-const props = defineProps<{
-  catalogLoader?: () => Promise<ModelCatalog>;
-}>();
 
 const catalog = ref<ModelCatalog | null>(null);
 const errorMessage = ref("");
 const loading = ref(true);
-const sourceLabel = computed(() =>
-  props.catalogLoader ? "Current draft" : "IndexedDB"
-);
-const loadingMessage = computed(() => `Loading spreadsheet data from ${sourceLabel.value}...`);
+const sourceLabel = "IndexedDB";
+
+const route = useRoute();
+const routeProjectId = computed(() => {
+  const param = route.params.projectId;
+  return typeof param === "string" ? param : null;
+});
+
+const loadingMessage = computed(() => `Loading spreadsheet data from ${sourceLabel}...`);
 
 const rows = computed<CatalogRow[]>(() => {
   if (!catalog.value) {
@@ -97,21 +100,17 @@ const summary = computed(() => {
     return "";
   }
 
-  return `${rows.value.length} rows expanded from the catalog in ${sourceLabel.value.toLowerCase()}.`;
+  return `${rows.value.length} rows expanded from the catalog in ${sourceLabel.toLowerCase()}.`;
 });
 
 onMounted(() => {
-  const loadCatalog = props.catalogLoader ?? loadModelCatalogFromIndexedDB;
-
-  void loadCatalog()
+  void loadModelCatalogFromIndexedDB(routeProjectId.value)
     .then((nextCatalog) => {
       catalog.value = nextCatalog;
     })
     .catch((error) => {
       console.error("Unable to load the CSV catalog", error);
-      errorMessage.value = props.catalogLoader
-        ? "The CSV screen could not load the current project draft."
-        : "The CSV screen could not load the catalog from IndexedDB.";
+      errorMessage.value = "The CSV screen could not load the catalog from IndexedDB.";
     })
     .finally(() => {
       loading.value = false;
