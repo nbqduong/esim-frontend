@@ -61,8 +61,8 @@ import {
   create3DViewer,
   type ModelCatalog,
   type ThreeDViewer,
-} from "@/three/create3DViewer";
-import { createStateLoader, type StateLoader } from "@/three/stateLoader";
+} from "@/features/project-create/three/create3DViewer";
+import { createStateLoader, type StateLoader } from "@/features/project-create/three/stateLoader";
 
 type SimulationStatus = "error" | "idle" | "paused" | "running";
 

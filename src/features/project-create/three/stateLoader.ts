@@ -1,9 +1,9 @@
-import type { ModelCatalog } from "./create3DViewer";
-import type { ObjectManager, ObjectState } from "./createObjectManager";
+import type { ModelCatalog } from "./create3DViewer.js";
+import type { ObjectManager, ObjectState } from "./createObjectManager.js";
 import createSimulatorModule, {
   type SimulatorModule,
-} from "../wasm/generated/simulator.js";
-import { decodeObjectState, encodeObjectState } from "./stateCodec";
+} from "@/wasm/generated/simulator.js";
+import { decodeObjectState, encodeObjectState } from "./stateCodec.js";
 
 export interface CreateStateLoaderOptions {
   catalog: ModelCatalog;

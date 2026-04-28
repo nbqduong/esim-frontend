@@ -1,6 +1,6 @@
 import { loadProjectDraft } from "@/data/project-loader";
-import type { ModelCatalog } from "@/three/create3DViewer";
-import { LED_OFF_STATE, LED_ON_STATE } from "@/three/stateCodec";
+import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
+import { LED_OFF_STATE, LED_ON_STATE } from "@/features/project-create/three/stateCodec";
 
 const VALID_STATES = new Set([LED_OFF_STATE, LED_ON_STATE]);
 

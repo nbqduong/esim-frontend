@@ -117,17 +117,14 @@
             <SimulateView
               v-else-if="activeWorkspaceView === 'simulate'"
               :key="activeWorkspaceViewKey"
-              :catalog-loader="loadEmbeddedCatalog"
             />
             <PDFView
               v-else-if="activeWorkspaceView === 'pdf'"
               :key="activeWorkspaceViewKey"
-              :catalog-loader="loadEmbeddedCatalog"
             />
             <CSVView
               v-else-if="activeWorkspaceView === 'csv'"
               :key="activeWorkspaceViewKey"
-              :catalog-loader="loadEmbeddedCatalog"
             />
           </section>
         </section>
@@ -150,7 +147,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import SystemMenu from "@/components/project/system-menu.vue";
-import { loadModelCatalogFromDraft, parseModelCatalog } from "@/data/data-loader";
+import { parseModelCatalog } from "@/data/data-loader";
 import {
   canUseProjectDraftStorage,
   createEmptyProjectDraft,
@@ -176,7 +173,7 @@ import {
   syncProject,
   uploadProjectArchive,
 } from "@/lib/projects";
-import type { ModelCatalog } from "@/three/create3DViewer";
+import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
 import CSVView from "@/views/CSV.vue";
 import Drawing2D from "@/views/Drawing2D.vue";
 import PDFView from "@/views/PDF.vue";
@@ -628,15 +625,7 @@ async function flushPendingDraftSave() {
   await draftSaveQueue;
 }
 
-async function loadEmbeddedCatalog(): Promise<ModelCatalog> {
-  await flushPendingDraftSave();
 
-  if (draftStorageEnabled) {
-    return loadModelCatalogFromDraft(currentDraft.value.projectId);
-  }
-
-  return parseModelCatalog(editorHandle.value?.getContent() ?? latestEditorContent);
-}
 
 function handlePageHide() {
   latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
@@ -914,12 +903,12 @@ watch(routeProjectId, async (newProjectId, oldProjectId) => {
 });
 
 watch(activeWorkspaceView, (nextView, previousView) => {
-  if (
-    previousView === "drawing" &&
-    nextView !== "drawing" &&
-    drawingSimulationStatus.value !== "idle"
-  ) {
-    drawing2DHandle.value?.stopSimulation();
+  if (previousView === "drawing" && nextView !== "drawing") {
+    if (drawingSimulationStatus.value !== "idle") {
+      drawing2DHandle.value?.stopSimulation();
+    }
+    // Flush the draft so the target view always reads fresh data from IndexedDB.
+    void flushPendingDraftSave();
   }
 });
 

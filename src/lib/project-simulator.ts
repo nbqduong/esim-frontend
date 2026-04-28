@@ -1,7 +1,7 @@
 import createSimulatorModule, { type SimulatorModule } from "@/wasm/generated/simulator.js";
-import type { ModelCatalog } from "@/three/create3DViewer";
-import type { ObjectState } from "@/three/createObjectManager";
-import { decodeObjectState, encodeObjectState } from "@/three/stateCodec";
+import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
+import type { ObjectState } from "@/features/project-create/three/createObjectManager";
+import { decodeObjectState, encodeObjectState } from "@/features/project-create/three/stateCodec";
 
 const POLL_INTERVAL_MS = 100;
 

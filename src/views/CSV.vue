@@ -54,7 +54,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { loadModelCatalogFromIndexedDB } from "@/data/modelCatalogDatabase";
-import type { ModelCatalog } from "@/three/create3DViewer";
+import type { ModelCatalog } from "@/features/project-create/three/create3DViewer";
 
 interface CatalogRow {
   description: string;
