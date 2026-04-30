@@ -7,6 +7,7 @@ import {
   type ObjectState,
 } from "./createObjectManager";
 import { loadModel, logModelNode } from "./loadModel";
+import Stats from "three/examples/jsm/libs/stats.module.js";
 
 export interface CatalogObject {
   id: string;
@@ -137,6 +138,12 @@ export const create3DViewer = ({
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.append(renderer.domElement);
 
+  const stats = new Stats();
+  stats.dom.style.position = "absolute";
+  stats.dom.style.top = "0px";
+  stats.dom.style.left = "0px";
+  container.appendChild(stats.dom);
+
   const objectGroup = new THREE.Group();
   scene.add(objectGroup);
 
@@ -160,6 +167,7 @@ export const create3DViewer = ({
       return;
     }
 
+    stats.update();
     renderer.render(scene, camera);
   };
 
@@ -428,6 +436,10 @@ export const create3DViewer = ({
       const canvas = renderer.domElement;
       if (canvas.parentNode) {
         canvas.parentNode.removeChild(canvas);
+      }
+
+      if (stats.dom.parentNode) {
+        stats.dom.parentNode.removeChild(stats.dom);
       }
 
       scene.traverse((object: THREE.Object3D) => {

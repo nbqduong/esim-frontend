@@ -127,7 +127,7 @@
             <Drawing2D
               ref="drawing2DHandle"
               v-show="activeWorkspaceView === 'drawing'"
-              :flush-draft="flushPendingDraftSave"
+              :flush-draft="draftScheduler.flush"
               :initial-content="currentDraft.content"
               :project-id="activeProjectId"
               @editor-ready="handleDrawingEditorReady"
@@ -176,21 +176,22 @@ import SystemMenu from "@/components/project/system-menu.vue";
 
 import {
   canManageProjectDrafts,
+  createDraftSaveScheduler,
   createManagedProjectDraft,
   deleteManagedProjectDraftByProjectId,
-  loadManagedProjectDraft,
+  getEffectiveTitle,
+  isBlankDraft,
+  isDraftDirty,
   replaceManagedProjectDraft,
-  saveManagedProjectDraft,
 } from "@/lib/browser-data/indexBD-manager";
+import type { DraftSaveState } from "@/lib/browser-data/indexBD-manager";
 import type {
   ProjectDraftRecord,
-  ProjectDraftSyncState,
 } from "@/lib/browser-data/indexDB-interface";
 import type {
   EditorHandle,
   EditorSnapshot,
 } from "@/features/project-create/editor/editor-host";
-import { buildProjectArchive } from "@/lib/outer-data/project-content";
 import {
   createCloudStorage,
   createLocalStorage,
@@ -198,6 +199,10 @@ import {
   type ProjectStorage,
   RateLimitError,
 } from "@/lib/outer-data/project-manager";
+import {
+  createCloudAutoSaveScheduler,
+  loadAndSyncDraft,
+} from "@/lib/orchestrator/draft-sync-orchestrator";
 
 import CSVView from "@/views/project-editor/CSV.vue";
 import Drawing2D from "@/views/project-editor/Drawing2D.vue";
@@ -208,7 +213,6 @@ defineOptions({ name: "ProjectCreate" });
 
 type WorkspaceView = "csv" | "drawing" | "pdf" | "simulate";
 type CloudSaveState = "error" | "idle" | "saving" | "synced";
-type DraftSaveState = "error" | "idle" | "saved" | "saving" | "unsupported";
 type DrawingSimulationStatus = "idle" | "running" | "starting";
 
 type WorkspaceViewItem = {
@@ -328,56 +332,26 @@ function showCloudToast(message: string) {
     cloudToastTimer = null;
   }, 5000);
 }
-const DRAFT_SAVE_DEBOUNCE_MS = 400;
-const CLOUD_AUTO_SAVE_DEBOUNCE_MS = 3000;
-
-let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let draftSaveQueue: Promise<void> = Promise.resolve();
-let cloudAutoSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let cloudAutoSaveQueue: Promise<void> = Promise.resolve();
 let isComponentDisposed = false;
 let isHydratingDraft = false;
 let hasSeenInitialEditorSnapshot = false;
 let latestEditorContent = "";
-let latestDraftSaveVersion = 0;
-let latestCloudAutoSaveVersion = 0;
 
-function getEffectiveTitle(candidate: string): string {
-  const trimmed = candidate.trim();
-  return trimmed || "Untitled";
-}
+// ── Draft save scheduler ──────────────────────────────────────────────────
+const draftScheduler = createDraftSaveScheduler({
+  enabled: draftStorageEnabled,
+  getContent: () => editorHandle.value?.getContent() ?? latestEditorContent,
+  getTitle: () => title.value,
+  getCurrentDraft: () => currentDraft.value,
+  onDraftSaved: (draft) => { currentDraft.value = draft; },
+  onStateChange: (s) => { draftSaveState.value = s; },
+  isDisposed: () => isComponentDisposed,
+});
 
-function isBlankDraft(titleValue: string, content: string): boolean {
-  return titleValue.trim().length === 0 && content.trim().length === 0;
-}
+// ── Cloud auto-save scheduler (instantiated after saveProjectToCloud is defined) ──
+// Forward-declared here, assigned after saveProjectToCloud is defined below.
+let cloudScheduler: ReturnType<typeof createCloudAutoSaveScheduler>;
 
-function isDraftDirty(
-  draft: Pick<
-    ProjectDraftRecord,
-    "content" | "lastSyncedChecksum" | "lastSyncedTitle" | "localChecksum" | "title"
-  >,
-): boolean {
-  if (draft.lastSyncedTitle === null && draft.lastSyncedChecksum === null) {
-    return !isBlankDraft(draft.title, draft.content);
-  }
-
-  if (draft.lastSyncedChecksum === null) {
-    return getEffectiveTitle(draft.title) !== (draft.lastSyncedTitle ?? "") || draft.content.length > 0;
-  }
-
-  return (
-    draft.localChecksum !== draft.lastSyncedChecksum ||
-    getEffectiveTitle(draft.title) !== (draft.lastSyncedTitle ?? "")
-  );
-}
-
-function getDraftSyncState(draft: ProjectDraftRecord): ProjectDraftSyncState {
-  if (!isDraftDirty(draft) && draft.projectId === null && isBlankDraft(draft.title, draft.content)) {
-    return "idle";
-  }
-
-  return isDraftDirty(draft) ? "dirty" : "synced";
-}
 
 const hasPendingLocalChanges = computed(
   () => latestEditorContent !== currentDraft.value.content || title.value !== currentDraft.value.title,
@@ -475,8 +449,8 @@ function handleDrawingEditorSnapshotChange(snapshot: EditorSnapshot) {
     return;
   }
 
-  scheduleDraftSave(snapshot.content);
-  scheduleCloudAutoSave();
+  draftScheduler.schedule(snapshot.content);
+  cloudScheduler.schedule();
 }
 
 function navigateHome() {
@@ -491,187 +465,10 @@ function handleMenuFile() {
   showCloudToast("File menu placeholder selected.");
 }
 
-async function buildPersistedDraft(
-  content: string,
-  titleValue: string,
-): Promise<ProjectDraftRecord> {
-  const archive = await buildProjectArchive(content);
-  const projectId = currentDraft.value.projectId;
-  const nextDraft: ProjectDraftRecord = {
-    ...currentDraft.value,
-    content,
-    id: currentDraft.value.id,
-    localChecksum: archive.checksum,
-    projectId,
-    syncState: "idle",
-    title: titleValue,
-    updatedAt: Date.now(),
-  };
-  nextDraft.syncState = getDraftSyncState(nextDraft);
-  return nextDraft;
-}
-
-function enqueueDraftSave(saveVersion: number) {
-  if (!draftStorageEnabled) {
-    return;
-  }
-
-  draftSaveQueue = draftSaveQueue
-    .catch(() => undefined)
-    .then(async () => {
-      const content = editorHandle.value?.getContent() ?? latestEditorContent;
-      const nextDraft = await buildPersistedDraft(content, title.value);
-      const nextCurrentDraft = await saveManagedProjectDraft(nextDraft);
-
-      if (isComponentDisposed) {
-        return;
-      }
-
-      currentDraft.value = nextCurrentDraft;
-
-      if (saveVersion === latestDraftSaveVersion) {
-        draftSaveState.value = "saved";
-      }
-    })
-    .catch((error) => {
-      console.error("Failed to save the project draft", error);
-
-      if (!isComponentDisposed && saveVersion === latestDraftSaveVersion) {
-        draftSaveState.value = "error";
-      }
-    });
-}
-
-function scheduleDraftSave(content: string) {
-  if (!draftStorageEnabled) {
-    return;
-  }
-
-  latestEditorContent = content;
-  latestDraftSaveVersion += 1;
-  const saveVersion = latestDraftSaveVersion;
-
-  if (draftSaveTimer) {
-    clearTimeout(draftSaveTimer);
-  }
-
-  draftSaveState.value = "saving";
-  draftSaveTimer = setTimeout(() => {
-    draftSaveTimer = null;
-    enqueueDraftSave(saveVersion);
-  }, DRAFT_SAVE_DEBOUNCE_MS);
-}
-
-function canScheduleCloudAutoSave() {
-  return (
-    editorReady.value &&
-    !isHydratingDraft &&
-    !isRouteHydrating.value &&
-    !isDeletingProject.value
-  );
-}
-
-type CloudAutoSaveOptions = {
-  allowDisposed?: boolean;
-  replaceRoute?: boolean;
-};
-
-function enqueueCloudAutoSave(saveVersion: number, options: CloudAutoSaveOptions = {}) {
-  cloudAutoSaveQueue = cloudAutoSaveQueue
-    .catch(() => undefined)
-    .then(async () => {
-      if (
-        (!options.allowDisposed && isComponentDisposed) ||
-        saveVersion !== latestCloudAutoSaveVersion ||
-        cloudSaveState.value === "saving" ||
-        isDeletingProject.value ||
-        isRouteHydrating.value
-      ) {
-        return;
-      }
-
-      const content = editorHandle.value?.getContent() ?? latestEditorContent;
-
-      if (
-        !hasUnsyncedCloudChanges.value ||
-        isBlankDraft(title.value, content)
-      ) {
-        return;
-      }
-
-      await saveProjectToCloud({ replaceRoute: options.replaceRoute });
-    });
-}
-
-function scheduleCloudAutoSave() {
-  if (!canScheduleCloudAutoSave()) {
-    return;
-  }
-
-  const content = editorHandle.value?.getContent() ?? latestEditorContent;
-
-  if (isBlankDraft(title.value, content)) {
-    return;
-  }
-
-  latestCloudAutoSaveVersion += 1;
-  const saveVersion = latestCloudAutoSaveVersion;
-
-  if (cloudAutoSaveTimer) {
-    clearTimeout(cloudAutoSaveTimer);
-  }
-
-  cloudAutoSaveTimer = setTimeout(() => {
-    cloudAutoSaveTimer = null;
-    enqueueCloudAutoSave(saveVersion);
-  }, CLOUD_AUTO_SAVE_DEBOUNCE_MS);
-}
-
-async function flushPendingCloudAutoSave(options: CloudAutoSaveOptions = {}) {
-  if (cloudAutoSaveTimer) {
-    clearTimeout(cloudAutoSaveTimer);
-    cloudAutoSaveTimer = null;
-    latestCloudAutoSaveVersion += 1;
-    enqueueCloudAutoSave(latestCloudAutoSaveVersion, options);
-  } else if (hasUnsyncedCloudChanges.value && !isBlankDraft(title.value, latestEditorContent)) {
-    latestCloudAutoSaveVersion += 1;
-    enqueueCloudAutoSave(latestCloudAutoSaveVersion, options);
-  }
-
-  await cloudAutoSaveQueue;
-}
-
-async function flushPendingDraftSave() {
-  if (!draftStorageEnabled) {
-    return;
-  }
-
-  latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
-
-  if (draftSaveTimer) {
-    clearTimeout(draftSaveTimer);
-    draftSaveTimer = null;
-    latestDraftSaveVersion += 1;
-    draftSaveState.value = "saving";
-    enqueueDraftSave(latestDraftSaveVersion);
-  } else if (
-    latestEditorContent !== currentDraft.value.content ||
-    title.value !== currentDraft.value.title
-  ) {
-    latestDraftSaveVersion += 1;
-    draftSaveState.value = "saving";
-    enqueueDraftSave(latestDraftSaveVersion);
-  }
-
-  await draftSaveQueue;
-}
-
-
-
 function handlePageHide() {
   latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
-  void flushPendingDraftSave();
-  void flushPendingCloudAutoSave({ replaceRoute: false });
+  void draftScheduler.flush();
+  void cloudScheduler.flush({ replaceRoute: false });
 }
 
 function handleBeforeUnload(event: BeforeUnloadEvent) {
@@ -683,58 +480,6 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = "";
 }
 
-async function loadDraftForRoute(projectId: string | null): Promise<ProjectDraftRecord> {
-  let draft = draftStorageEnabled
-    ? await loadManagedProjectDraft(projectId)
-    : null;
-  draft ??= createManagedProjectDraft(projectId);
-
-  if (!projectId) {
-    draft.syncState = getDraftSyncState(draft);
-    return draft;
-  }
-
-  const syncResult = await projectStorage.sync({
-    projectId,
-    localChecksum: draft.localChecksum,
-  });
-
-  if (syncResult.needsSync && syncResult.content !== null) {
-    const downloadedDraft: ProjectDraftRecord = {
-      content: syncResult.content,
-      id: createManagedProjectDraft(syncResult.projectId).id,
-      lastSyncedChecksum: syncResult.contentChecksum ?? syncResult.checksum,
-      lastSyncedTitle: syncResult.title,
-      localChecksum: syncResult.contentChecksum ?? syncResult.checksum,
-      projectId: syncResult.projectId,
-      syncState: "synced",
-      title: syncResult.title,
-      updatedAt: Date.now(),
-    };
-    if (draftStorageEnabled) {
-      return saveManagedProjectDraft(downloadedDraft);
-    }
-    return downloadedDraft;
-  }
-
-  const wasLocallyDirty = isDraftDirty(draft);
-  const syncedDraft: ProjectDraftRecord = {
-    ...draft,
-    id: createManagedProjectDraft(syncResult.projectId).id,
-    lastSyncedChecksum: syncResult.contentChecksum,
-    lastSyncedTitle: syncResult.title,
-    projectId: syncResult.projectId,
-    title: wasLocallyDirty ? draft.title : syncResult.title,
-    updatedAt: Date.now(),
-  };
-  syncedDraft.syncState = getDraftSyncState(syncedDraft);
-
-  if (draftStorageEnabled) {
-    return saveManagedProjectDraft(syncedDraft);
-  }
-
-  return syncedDraft;
-}
 
 async function applyDraft(draft: ProjectDraftRecord) {
   isHydratingDraft = true;
@@ -756,7 +501,11 @@ async function hydrateCurrentRoute() {
   isRouteHydrating.value = true;
 
   try {
-    const draft = await loadDraftForRoute(routeProjectId.value);
+    const draft = await loadAndSyncDraft({
+      projectId: routeProjectId.value,
+      draftStorageEnabled,
+      sync: (input) => projectStorage.sync(input),
+    });
     await applyDraft(draft);
   } catch (error) {
     if (error instanceof RateLimitError) {
@@ -788,7 +537,7 @@ async function saveProjectToCloud(options: CloudSaveOptions = {}) {
       title.value = normalizedTitle;
     }
 
-    await flushPendingDraftSave();
+    await draftScheduler.flush();
 
     const content = editorHandle.value?.getContent() ?? latestEditorContent;
     latestEditorContent = content;
@@ -853,13 +602,28 @@ async function saveProjectToCloud(options: CloudSaveOptions = {}) {
   }
 }
 
+// ── Instantiate cloud auto-save scheduler (needs saveProjectToCloud) ──────
+cloudScheduler = createCloudAutoSaveScheduler({
+  canSchedule: () =>
+    editorReady.value &&
+    !isHydratingDraft &&
+    !isRouteHydrating.value &&
+    !isDeletingProject.value,
+  getTitle: () => title.value,
+  getContent: () => editorHandle.value?.getContent() ?? latestEditorContent,
+  hasUnsyncedChanges: () => hasUnsyncedCloudChanges.value,
+  isSaving: () => cloudSaveState.value === "saving" || isDeletingProject.value || isRouteHydrating.value,
+  isDisposed: () => isComponentDisposed,
+  saveToCloud: (opts) => saveProjectToCloud({ replaceRoute: opts?.replaceRoute }),
+});
+
 async function handleSaveToCloud() {
   await saveProjectToCloud();
 }
 
 async function handleExportToLocal() {
   try {
-    await flushPendingDraftSave();
+    await draftScheduler.flush();
     const content = editorHandle.value?.getContent() ?? latestEditorContent;
     const normalizedTitle = getEffectiveTitle(title.value);
     const localExporter = createLocalStorage();
@@ -890,7 +654,7 @@ async function handleImportFromLocal() {
     }
 
     // Save to IndexedDB so the other views can pick it up.
-    scheduleDraftSave(result.content);
+    draftScheduler.schedule(result.content);
   } catch (error) {
     // The user cancelling the file picker is not a real error.
     if (error instanceof Error && error.message.includes("cancelled")) {
@@ -934,17 +698,17 @@ watch(title, () => {
     return;
   }
 
-  scheduleDraftSave(editorHandle.value?.getContent() ?? latestEditorContent);
-  scheduleCloudAutoSave();
+  draftScheduler.schedule(editorHandle.value?.getContent() ?? latestEditorContent);
+  cloudScheduler.schedule();
 });
 
 watch(cloudSaveState, (nextState, previousState) => {
   if (
     previousState === "saving" &&
-    nextState !== "saving" &&
+    nextState === "synced" &&
     hasUnsyncedCloudChanges.value
   ) {
-    scheduleCloudAutoSave();
+    cloudScheduler.schedule();
   }
 });
 
@@ -954,8 +718,8 @@ watch(routeProjectId, async (newProjectId, oldProjectId) => {
   }
 
   latestEditorContent = editorHandle.value?.getContent() ?? latestEditorContent;
-  await flushPendingDraftSave();
-  await flushPendingCloudAutoSave({ replaceRoute: false });
+  await draftScheduler.flush();
+  await cloudScheduler.flush({ replaceRoute: false });
   await hydrateCurrentRoute();
 });
 
@@ -965,12 +729,16 @@ watch(activeWorkspaceView, (nextView, previousView) => {
       drawing2DHandle.value?.stopSimulation();
     }
     // Flush the draft so the target view always reads fresh data from IndexedDB.
-    void flushPendingDraftSave();
+    void draftScheduler.flush();
   }
 });
 
 onMounted(async () => {
-  const initialDraft = await loadDraftForRoute(routeProjectId.value).catch((error) => {
+  const initialDraft = await loadAndSyncDraft({
+    projectId: routeProjectId.value,
+    draftStorageEnabled,
+    sync: (input) => projectStorage.sync(input),
+  }).catch((error) => {
     console.error("Failed to load the initial project draft", error);
     cloudSaveState.value = "error";
     draftSaveState.value = draftStorageEnabled ? "error" : "unsupported";
@@ -996,9 +764,11 @@ onBeforeUnmount(() => {
   drawing2DHandle.value = null;
   editorHandle.value?.destroy();
   editorHandle.value = null;
-  void flushPendingDraftSave();
+  void draftScheduler.flush();
   isComponentDisposed = true;
-  void flushPendingCloudAutoSave({ allowDisposed: true, replaceRoute: false });
+  void cloudScheduler.flush({ allowDisposed: true, replaceRoute: false });
+  draftScheduler.dispose();
+  cloudScheduler.dispose();
 });
 </script>
 
