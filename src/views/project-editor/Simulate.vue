@@ -56,6 +56,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { catalogManager } from "@/features/static-models/catalogManager";
 
 import { loadModelCatalogFromIndexedDB } from "@/lib/browser-data/indexBD-manager";
 import {
@@ -223,6 +224,7 @@ const initializeScreen = async (): Promise<void> => {
   }
 
   try {
+    await catalogManager.initialize();
     const catalog = await loadModelCatalogFromIndexedDB(routeProjectId.value);
 
     if (destroyed) {

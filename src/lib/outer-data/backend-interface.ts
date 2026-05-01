@@ -95,7 +95,7 @@ export class BackendApiError extends Error {
   }
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(backendUrl(path), {
     credentials: "include",
     ...init,

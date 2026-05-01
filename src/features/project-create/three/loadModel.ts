@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { catalogManager } from "@/features/static-models/catalogManager";
 
 export interface LoadModelOptions {
   modelUrl: string;
@@ -49,13 +50,34 @@ const prepareModelNode = (
   }
 };
 
+export const resolveModelUrl = (url: string): string => {
+  const baseUrl = import.meta.env.VITE_SYSTEM_STATIC_ASSETS_GCS_BUCKET_NAME;
+  if (!baseUrl) {
+    return url;
+  }
+  
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+
+  const cleanBase = baseUrl.replace(/\/+$/, "");
+  const cleanUrl = url.replace(/^\/+/, "");
+  return `${cleanBase}/${cleanUrl}`;
+};
+
 export const loadModel = ({
   modelUrl,
   onNode,
-}: LoadModelOptions): Promise<LoadModelResult> =>
-  new Promise((resolve, reject) => {
+}: LoadModelOptions): Promise<LoadModelResult> => {
+  const resolvedUrl = catalogManager.getValidModelUrl(modelUrl);
+  
+  if (!resolvedUrl) {
+    return Promise.reject(new Error(`Model URL ${modelUrl} is not a valid public static asset.`));
+  }
+  
+  return new Promise((resolve, reject) => {
     loader.load(
-      modelUrl,
+      resolvedUrl,
       (gltf: GLTF) => {
         const model = gltf.scene;
 
@@ -72,3 +94,4 @@ export const loadModel = ({
       reject
     );
   });
+};
