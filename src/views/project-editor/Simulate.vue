@@ -114,6 +114,60 @@
           {{ errorMessage }}
         </div>
       </section>
+
+      <aside class="settings-sidebar" aria-label="Object settings">
+        <div class="settings-sidebar__header">
+          <span class="settings-sidebar__title">Object</span>
+          <span
+            v-if="selectedObject"
+            class="settings-sidebar__badge"
+          >selected</span>
+        </div>
+
+        <div v-if="selectedObject" class="settings-sidebar__content">
+          <div class="settings-sidebar__section">
+            <p class="settings-sidebar__name">{{ selectedObject.name }}</p>
+            <p class="settings-sidebar__description">
+              {{ selectedObject.description || "No description available." }}
+            </p>
+          </div>
+
+          <dl class="settings-sidebar__details">
+            <div class="settings-sidebar__detail">
+              <dt>ID</dt>
+              <dd>{{ selectedObject.id }}</dd>
+            </div>
+            <div class="settings-sidebar__detail">
+              <dt>Source</dt>
+              <dd>{{ selectedObject.spawned ? "Spawned" : "Catalog" }}</dd>
+            </div>
+            <div class="settings-sidebar__detail">
+              <dt>Model</dt>
+              <dd>{{ selectedObject.modelUrl || "Unknown" }}</dd>
+            </div>
+            <div class="settings-sidebar__detail">
+              <dt>Status</dt>
+              <dd>
+                <span class="settings-sidebar__status">
+                  {{ selectedObject.state }}
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <button
+            class="settings-sidebar__delete"
+            type="button"
+            @click="handleDeleteSelectedObject"
+          >
+            Delete object
+          </button>
+        </div>
+
+        <div v-else class="settings-sidebar__empty">
+          Select an object in the scene to view its metadata and status.
+        </div>
+      </aside>
     </div>
   </section>
 </template>
@@ -131,6 +185,7 @@ import { loadModelCatalogFromIndexedDB } from "@/lib/browser-data/indexBD-manage
 import {
   create3DViewer,
   type ModelCatalog,
+  type SelectedObjectDetails,
   type ThreeDViewer,
 } from "@/features/project-create/three/create3DViewer";
 import { createStateLoader, type StateLoader } from "@/features/project-create/three/stateLoader";
@@ -165,6 +220,7 @@ const simulationStatus = ref<SimulationStatus>("idle");
 const errorMessage = ref("");
 const interactionMessage = ref("");
 const loadedCatalog = ref<ModelCatalog | null>(null);
+const selectedObject = ref<SelectedObjectDetails | null>(null);
 const sourceLabel = "IndexedDB";
 const route = useRoute();
 const routeProjectId = computed(() => {
@@ -308,6 +364,14 @@ async function handleSpawn(asset: StaticAsset): Promise<void> {
   }
 }
 
+function handleDeleteSelectedObject(): void {
+  if (!viewer.value || !selectedObject.value) {
+    return;
+  }
+
+  viewer.value.deleteObject(selectedObject.value.id);
+}
+
 // ─── Initialization ───────────────────────────────────────────────────────────
 async function fetchAssets(): Promise<void> {
   assetsLoading.value = true;
@@ -345,6 +409,9 @@ const initializeScreen = async (): Promise<void> => {
       catalog,
       onInteractionMessage: (message) => {
         interactionMessage.value = message;
+      },
+      onSelectedObjectChange: (details) => {
+        selectedObject.value = details;
       },
     });
 
@@ -694,5 +761,147 @@ defineExpose({
   font-weight: 600;
   text-align: center;
   z-index: 1;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex: 0 0 280px;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid rgba(208, 215, 222, 0.75);
+  border-radius: 0.9rem;
+  background: #f9fafb;
+  overflow: hidden;
+}
+
+.settings-sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.85rem 0.6rem;
+  border-bottom: 1px solid rgba(208, 215, 222, 0.6);
+  background: #ffffff;
+}
+
+.settings-sidebar__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #24292f;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-sidebar__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(9, 105, 218, 0.08);
+  color: #0969da;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.settings-sidebar__content,
+.settings-sidebar__empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.9rem 0.85rem;
+}
+
+.settings-sidebar__empty {
+  justify-content: center;
+  color: #8c959f;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.settings-sidebar__section {
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(208, 215, 222, 0.6);
+}
+
+.settings-sidebar__name {
+  margin: 0;
+  color: #24292f;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.settings-sidebar__description {
+  margin: 0.45rem 0 0;
+  color: #57606a;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.settings-sidebar__details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.95rem 0;
+}
+
+.settings-sidebar__detail {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.settings-sidebar__detail dt {
+  color: #57606a;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-sidebar__detail dd {
+  margin: 0;
+  color: #24292f;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.settings-sidebar__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(9, 105, 218, 0.08);
+  color: #0969da;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.settings-sidebar__delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  margin-top: auto;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(209, 36, 47, 0.2);
+  border-radius: 0.45rem;
+  background: rgba(209, 36, 47, 0.08);
+  color: #cf222e;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.settings-sidebar__delete:hover {
+  border-color: rgba(209, 36, 47, 0.35);
+  background: rgba(209, 36, 47, 0.12);
 }
 </style>

@@ -27,6 +27,7 @@ export interface ObjectManager {
   listObjects: () => ObjectRecord[];
   notifyChange: () => void;
   registerObject: (options: RegisterObjectOptions) => void;
+  removeObject: (id: string) => ObjectRecord | undefined;
   setObjectState: (
     id: string,
     state: ObjectState,
@@ -123,6 +124,17 @@ export const createObjectManager = ({
         object,
         state,
       });
+    },
+    removeObject: (id: string): ObjectRecord | undefined => {
+      const record = objectsById.get(id);
+
+      if (!record) {
+        return undefined;
+      }
+
+      objectsById.delete(id);
+      notifyChange();
+      return record;
     },
     setObjectState,
   };

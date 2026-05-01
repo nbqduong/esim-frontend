@@ -25,13 +25,24 @@ export interface CatalogEntry {
 
 export type ModelCatalog = CatalogEntry[];
 
+export interface SelectedObjectDetails {
+  description: string;
+  id: string;
+  modelUrl: string;
+  name: string;
+  spawned: boolean;
+  state: ObjectState;
+}
+
 export interface Create3DViewerOptions {
   container: HTMLElement;
   catalog: ModelCatalog;
   onInteractionMessage?: (message: string) => void;
+  onSelectedObjectChange?: (details: SelectedObjectDetails | null) => void;
 }
 
 export interface ThreeDViewer {
+  deleteObject: (id: string) => boolean;
   destroy: () => void;
   objectManager: ObjectManager;
   ready: Promise<void>;
@@ -128,6 +139,7 @@ export const create3DViewer = ({
   container,
   catalog,
   onInteractionMessage,
+  onSelectedObjectChange,
 }: Create3DViewerOptions): ThreeDViewer => {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#f3efe4");
@@ -157,13 +169,48 @@ export const create3DViewer = ({
   let renderRequested = false;
   let mixers: THREE.AnimationMixer[] = [];
   let readySettled = false;
+  let selectedObjectId: string | null = null;
   let resolveReady!: () => void;
   let rejectReady!: (error: unknown) => void;
+
+  const metadataById = new Map<
+    string,
+    {
+      description: string;
+      modelUrl: string;
+      name: string;
+      spawned: boolean;
+    }
+  >();
 
   const ready = new Promise<void>((resolve, reject) => {
     resolveReady = resolve;
     rejectReady = reject;
   });
+
+  const emitSelectedObjectChange = (): void => {
+    if (!selectedObjectId) {
+      onSelectedObjectChange?.(null);
+      return;
+    }
+
+    const record = objectManager.getObjectRecord(selectedObjectId);
+    const metadata = metadataById.get(selectedObjectId);
+
+    if (!record || !metadata) {
+      onSelectedObjectChange?.(null);
+      return;
+    }
+
+    onSelectedObjectChange?.({
+      description: metadata.description,
+      id: selectedObjectId,
+      modelUrl: metadata.modelUrl,
+      name: metadata.name,
+      spawned: metadata.spawned,
+      state: record.state,
+    });
+  };
 
   const render = (): void => {
     renderRequested = false;
@@ -187,7 +234,10 @@ export const create3DViewer = ({
   };
 
   const objectManager = createObjectManager({
-    onChange: requestRenderIfNotRequested,
+    onChange: () => {
+      requestRenderIfNotRequested();
+      emitSelectedObjectChange();
+    },
     onStateChange: applyObjectState,
   });
 
@@ -202,6 +252,10 @@ export const create3DViewer = ({
     controls,
     domElement: renderer.domElement,
     onInteractionMessage,
+    onObjectSelectionChange: (objectId) => {
+      selectedObjectId = objectId;
+      emitSelectedObjectChange();
+    },
     onRenderRequest: requestRenderIfNotRequested,
     scene,
   });
@@ -341,9 +395,11 @@ export const create3DViewer = ({
     const spacingZ =
       Math.max(1, ...catalogEntries.map(({ template }) => template.size.z)) + 0.6;
 
+    selectedObjectId = null;
     objectGroup.clear();
     objectManager.clear();
     wiringEditor.clear();
+    metadataById.clear();
     mixers = [];
 
     let objectIndex = 0;
@@ -365,6 +421,12 @@ export const create3DViewer = ({
           name: item.name,
           state: item.state,
         };
+        metadataById.set(item.id, {
+          description: item.description,
+          modelUrl: entry.modelUrl,
+          name: item.name,
+          spawned: false,
+        });
 
         objectGroup.add(instance);
         objectManager.registerObject({
@@ -404,6 +466,7 @@ export const create3DViewer = ({
 
       populateObjectGrid(catalogEntries);
       fitCameraToObject(objectGroup);
+      emitSelectedObjectChange();
 
       if (mixers.length > 0) {
         startRenderLoop();
@@ -436,6 +499,18 @@ export const create3DViewer = ({
     scene,
     objectManager,
     onObjectSpawned: (id, object) => {
+      metadataById.set(id, {
+        description:
+          typeof object.userData.description === "string"
+            ? object.userData.description
+            : "Spawned object",
+        modelUrl:
+          typeof object.userData.modelUrl === "string"
+            ? object.userData.modelUrl
+            : "",
+        name: typeof object.userData.name === "string" ? object.userData.name : object.name || id,
+        spawned: true,
+      });
       wiringEditor.registerObject(id, object);
     },
     onRenderRequest: requestRenderIfNotRequested,
@@ -447,6 +522,32 @@ export const create3DViewer = ({
   });
 
   return {
+    deleteObject: (id: string): boolean => {
+      const object = objectManager.getObjectById(id);
+      if (!object) {
+        return false;
+      }
+
+      if (selectedObjectId === id) {
+        selectedObjectId = null;
+      }
+
+      wiringEditor.removeObject(id);
+      object.removeFromParent();
+      metadataById.delete(id);
+      objectManager.removeObject(id);
+      mixers = mixers.filter((activeMixer) => {
+        if (activeMixer.getRoot() === object) {
+          activeMixer.stopAllAction();
+          return false;
+        }
+
+        return true;
+      });
+      emitSelectedObjectChange();
+      requestRenderIfNotRequested();
+      return true;
+    },
     destroy: (): void => {
       destroyed = true;
       if (!readySettled) {

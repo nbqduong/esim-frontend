@@ -10,6 +10,7 @@ export interface CreateWiringEditorOptions {
   controls: OrbitControls;
   domElement: HTMLCanvasElement;
   onInteractionMessage?: (message: string) => void;
+  onObjectSelectionChange?: (objectId: string | null) => void;
   onRenderRequest: () => void;
   scene: THREE.Scene;
 }
@@ -19,6 +20,7 @@ export interface WiringEditor {
   dispose: () => void;
   prepareRender: () => void;
   registerObject: (id: string, object: THREE.Object3D) => void;
+  removeObject: (id: string) => void;
   updateSize: (width: number, height: number) => void;
 }
 
@@ -199,6 +201,7 @@ export const createWiringEditor = ({
   controls,
   domElement,
   onInteractionMessage,
+  onObjectSelectionChange,
   onRenderRequest,
   scene,
 }: CreateWiringEditorOptions): WiringEditor => {
@@ -280,6 +283,12 @@ export const createWiringEditor = ({
   };
 
   const wireSystem = createWireSystem();
+
+  const emitObjectSelectionChange = (): void => {
+    onObjectSelectionChange?.(
+      currentSelection?.type === "object" ? currentSelection.objectId : null
+    );
+  };
 
   const emitInteractionMessage = (message?: string): void => {
     if (message) {
@@ -632,6 +641,7 @@ export const createWiringEditor = ({
     showWireHandles(null);
     transformControls.attach(wiringObject.object);
     refreshConnectionPointVisuals();
+    emitObjectSelectionChange();
     emitInteractionMessage();
     onRenderRequest();
   };
@@ -646,6 +656,7 @@ export const createWiringEditor = ({
     showWireHandles(wireIndex);
     transformControls.detach();
     refreshConnectionPointVisuals();
+    emitObjectSelectionChange();
     emitInteractionMessage();
     onRenderRequest();
   };
@@ -661,6 +672,7 @@ export const createWiringEditor = ({
     currentSelection = { handleIndex, type: "wire-handle", wireIndex };
     transformControls.attach(handleMesh);
     refreshConnectionPointVisuals();
+    emitObjectSelectionChange();
     emitInteractionMessage();
     onRenderRequest();
   };
@@ -671,6 +683,7 @@ export const createWiringEditor = ({
     showWireHandles(null);
     transformControls.detach();
     refreshConnectionPointVisuals();
+    emitObjectSelectionChange();
     emitInteractionMessage();
     onRenderRequest();
   };
@@ -684,6 +697,7 @@ export const createWiringEditor = ({
     showWireHandles(null);
     transformControls.detach();
     refreshConnectionPointVisuals();
+    emitObjectSelectionChange();
     emitInteractionMessage();
     onRenderRequest();
   };
@@ -986,6 +1000,21 @@ export const createWiringEditor = ({
     onRenderRequest();
   });
 
+  const rebuildWireMappings = (): void => {
+    wireSystem.objectWireMap.clear();
+    wireSystem.segmentToWire.fill(-1);
+    wireSystem.positionBuffer.fill(0);
+    wireSystem.geometry.instanceCount =
+      wireSystem.wires.length * MAX_SEGMENTS_PER_WIRE;
+
+    wireSystem.wires.forEach((wire, wireIndex) => {
+      registerWireObjectLink(wire.startObjectId, wireIndex);
+      registerWireObjectLink(wire.endObjectId, wireIndex);
+      wire.segmentOffset = wireIndex * MAX_SEGMENTS_PER_WIRE;
+      markWireDirty(wireIndex);
+    });
+  };
+
   domElement.addEventListener("pointerdown", handleSceneSelection);
   window.addEventListener("keydown", handleSceneKeydown);
   emitInteractionMessage();
@@ -1014,6 +1043,7 @@ export const createWiringEditor = ({
         handleMesh.visible = false;
       });
       refreshPickableMeshes();
+      emitObjectSelectionChange();
       emitInteractionMessage();
       onRenderRequest();
     },
@@ -1088,6 +1118,38 @@ export const createWiringEditor = ({
       });
       refreshConnectionPointVisuals();
       refreshPickableMeshes();
+      onRenderRequest();
+    },
+    removeObject: (id: string): void => {
+      const wiringObject = objects.get(id);
+      if (!wiringObject) {
+        return;
+      }
+
+      currentSelection = null;
+      transformControls.detach();
+      showWireHandles(null);
+
+      if (pendingWireStart?.objectId === id) {
+        pendingWireStart = null;
+      }
+
+      wiringObject.connectionPoints.forEach((connectionPoint) => {
+        connectionPoint.marker.removeFromParent();
+        connectionPoint.marker.material.dispose();
+      });
+      objects.delete(id);
+
+      const remainingWires = wireSystem.wires.filter((wire) => {
+        return wire.startObjectId !== id && wire.endObjectId !== id;
+      });
+      wireSystem.wires = remainingWires;
+
+      rebuildWireMappings();
+      refreshConnectionPointVisuals();
+      refreshPickableMeshes();
+      emitObjectSelectionChange();
+      emitInteractionMessage();
       onRenderRequest();
     },
     updateSize: (width: number, height: number): void => {
