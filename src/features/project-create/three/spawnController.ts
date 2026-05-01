@@ -8,6 +8,7 @@ export interface SpawnControllerOptions {
   objectManager: ObjectManager;
   onRenderRequest: () => void;
   onMixerAdded: (mixer: THREE.AnimationMixer) => void;
+  onObjectSpawned?: (id: string, object: THREE.Object3D) => void;
 }
 
 export interface SpawnController {
@@ -38,6 +39,7 @@ export const createSpawnController = ({
   objectManager,
   onRenderRequest,
   onMixerAdded,
+  onObjectSpawned,
 }: SpawnControllerOptions): SpawnController => {
   // Simple cache: url → loaded template (model + animations)
   const templateCache = new Map<
@@ -86,6 +88,7 @@ export const createSpawnController = ({
         object: instance,
         state: "LED_Off",
       });
+      onObjectSpawned?.(instanceId, instance);
 
       if (animations.length > 0) {
         const mixer = new THREE.AnimationMixer(instance);

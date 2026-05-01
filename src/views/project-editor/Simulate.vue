@@ -23,6 +23,7 @@
         <span>{{ statusLabel }}</span>
         <span>{{ sourceLabel }}</span>
         <span v-if="catalogSummary">{{ catalogSummary }}</span>
+        <span v-if="interactionMessage">{{ interactionMessage }}</span>
       </div>
       <p v-if="errorMessage" class="simulate-screen__error" role="alert">
         {{ errorMessage }}
@@ -162,6 +163,7 @@ const catalogLoading = ref(true);
 const isBusy = ref(false);
 const simulationStatus = ref<SimulationStatus>("idle");
 const errorMessage = ref("");
+const interactionMessage = ref("");
 const loadedCatalog = ref<ModelCatalog | null>(null);
 const sourceLabel = "IndexedDB";
 const route = useRoute();
@@ -341,6 +343,9 @@ const initializeScreen = async (): Promise<void> => {
     viewer.value = create3DViewer({
       container,
       catalog,
+      onInteractionMessage: (message) => {
+        interactionMessage.value = message;
+      },
     });
 
     stateLoader.value = createStateLoader({
@@ -374,6 +379,7 @@ watch(
     catalogLoading,
     catalogSummary,
     errorMessage,
+    interactionMessage,
     loadingMessage,
     sourceLabel,
     startPauseLabel,

@@ -6,6 +6,7 @@ import {
   type ObjectManager,
   type ObjectState,
 } from "./createObjectManager";
+import { createWiringEditor } from "./createWiringEditor";
 import { loadModel, logModelNode } from "./loadModel";
 import { createSpawnController } from "./spawnController";
 import Stats from "three/examples/jsm/libs/stats.module.js";
@@ -27,6 +28,7 @@ export type ModelCatalog = CatalogEntry[];
 export interface Create3DViewerOptions {
   container: HTMLElement;
   catalog: ModelCatalog;
+  onInteractionMessage?: (message: string) => void;
 }
 
 export interface ThreeDViewer {
@@ -125,6 +127,7 @@ const applyObjectState = (
 export const create3DViewer = ({
   container,
   catalog,
+  onInteractionMessage,
 }: Create3DViewerOptions): ThreeDViewer => {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#f3efe4");
@@ -169,6 +172,7 @@ export const create3DViewer = ({
       return;
     }
 
+    wiringEditor.prepareRender();
     stats.update();
     renderer.render(scene, camera);
   };
@@ -191,6 +195,15 @@ export const create3DViewer = ({
     camera,
     domElement: renderer.domElement,
     onChange: requestRenderIfNotRequested,
+  });
+
+  const wiringEditor = createWiringEditor({
+    camera,
+    controls,
+    domElement: renderer.domElement,
+    onInteractionMessage,
+    onRenderRequest: requestRenderIfNotRequested,
+    scene,
   });
 
   const ambientLight = new THREE.HemisphereLight("#fff8e8", "#a58f7d", 1.3);
@@ -293,6 +306,7 @@ export const create3DViewer = ({
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
+    wiringEditor.updateSize(width, height);
     controls.update();
     requestRenderIfNotRequested();
   };
@@ -329,6 +343,7 @@ export const create3DViewer = ({
 
     objectGroup.clear();
     objectManager.clear();
+    wiringEditor.clear();
     mixers = [];
 
     let objectIndex = 0;
@@ -357,6 +372,7 @@ export const create3DViewer = ({
           object: instance,
           state: item.state,
         });
+        wiringEditor.registerObject(item.id, instance);
 
         if (template.animations.length > 0) {
           const mixer = new THREE.AnimationMixer(instance);
@@ -419,6 +435,9 @@ export const create3DViewer = ({
   const spawnController = createSpawnController({
     scene,
     objectManager,
+    onObjectSpawned: (id, object) => {
+      wiringEditor.registerObject(id, object);
+    },
     onRenderRequest: requestRenderIfNotRequested,
     onMixerAdded: (mixer) => {
       mixers.push(mixer);
@@ -438,6 +457,7 @@ export const create3DViewer = ({
       window.removeEventListener("resize", handleResize);
 
       controls.dispose();
+      wiringEditor.dispose();
 
       mixers.forEach((activeMixer) => {
         activeMixer.stopAllAction();
