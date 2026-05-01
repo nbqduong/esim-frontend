@@ -7,6 +7,7 @@ import {
   type ObjectState,
 } from "./createObjectManager";
 import { loadModel, logModelNode } from "./loadModel";
+import { createSpawnController } from "./spawnController";
 import Stats from "three/examples/jsm/libs/stats.module.js";
 
 export interface CatalogObject {
@@ -32,6 +33,7 @@ export interface ThreeDViewer {
   destroy: () => void;
   objectManager: ObjectManager;
   ready: Promise<void>;
+  spawnAsset: (modelUrl: string) => Promise<void>;
 }
 
 interface LoadedTemplate {
@@ -414,6 +416,17 @@ export const create3DViewer = ({
   requestRenderIfNotRequested();
   window.addEventListener("resize", handleResize);
 
+  const spawnController = createSpawnController({
+    scene,
+    objectManager,
+    onRenderRequest: requestRenderIfNotRequested,
+    onMixerAdded: (mixer) => {
+      mixers.push(mixer);
+      // Ensure the render loop is running when animations are added dynamically
+      startRenderLoop();
+    },
+  });
+
   return {
     destroy: (): void => {
       destroyed = true;
@@ -458,5 +471,6 @@ export const create3DViewer = ({
     },
     objectManager,
     ready,
+    spawnAsset: spawnController.spawnAsset,
   };
 };
