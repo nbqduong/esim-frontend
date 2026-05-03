@@ -86,33 +86,10 @@ const normalizeTemplateModel = (template: THREE.Group): THREE.Vector3 => {
   return size;
 };
 
-const cloneInstanceMaterials = (object: THREE.Object3D): void => {
-  object.traverse((node: THREE.Object3D) => {
-    if (!(node instanceof THREE.Mesh)) {
-      return;
-    }
-
-    if (Array.isArray(node.material)) {
-      node.material = node.material.map((material: THREE.Material) =>
-        material.clone()
-      );
-      return;
-    }
-
-    if (node.material) {
-      node.material = node.material.clone();
-    }
-  });
-};
-
-const applyObjectState = (
-  object: THREE.Object3D,
-  state: ObjectState
-): void => {
-  object.userData = {
-    ...object.userData,
-    state,
-  };
+const collectStateMaterials = (
+  object: THREE.Object3D
+): Map<string, THREE.Material> => {
+  const stateMaterials = new Map<string, THREE.Material>();
 
   object.traverse((node: THREE.Object3D) => {
     if (!(node instanceof THREE.Mesh)) {
@@ -125,13 +102,79 @@ const applyObjectState = (
 
     materials.forEach((material: THREE.Material) => {
       if (LED_STATE_MATERIALS.has(material.name)) {
-        material.visible = material.name === state;
-        material.needsUpdate = true;
-        return;
+        stateMaterials.set(material.name, material);
       }
-
-      material.visible = true;
     });
+  });
+
+  return stateMaterials;
+};
+
+const cloneInstanceMaterials = (object: THREE.Object3D): void => {
+  const materialMap = new Map<THREE.Material, THREE.Material>();
+
+  object.traverse((node: THREE.Object3D) => {
+    if (!(node instanceof THREE.Mesh)) {
+      return;
+    }
+
+    if (Array.isArray(node.material)) {
+      node.material = node.material.map((material: THREE.Material) => {
+        let cloned = materialMap.get(material);
+        if (!cloned) {
+          cloned = material.clone();
+          materialMap.set(material, cloned);
+        }
+        return cloned;
+      });
+      return;
+    }
+
+    if (node.material) {
+      let cloned = materialMap.get(node.material as THREE.Material);
+      if (!cloned) {
+        cloned = (node.material as THREE.Material).clone();
+        materialMap.set(node.material as THREE.Material, cloned);
+      }
+      node.material = cloned;
+    }
+  });
+
+  object.userData = {
+    ...object.userData,
+    stateMaterials: collectStateMaterials(object),
+  };
+};
+
+const applyObjectState = (
+  object: THREE.Object3D,
+  state: ObjectState
+): void => {
+  object.userData = {
+    ...object.userData,
+    state,
+  };
+
+  const stateMaterials =
+    object.userData.stateMaterials instanceof Map
+      ? (object.userData.stateMaterials as Map<string, THREE.Material>)
+      : collectStateMaterials(object);
+  const targetMaterial = stateMaterials.get(state);
+
+  if (!targetMaterial) {
+    return;
+  }
+
+  targetMaterial.visible = true;
+  targetMaterial.needsUpdate = true;
+
+  object.traverse((node: THREE.Object3D) => {
+    if (
+      node instanceof THREE.Mesh &&
+      typeof node.userData.selectionType !== "string"
+    ) {
+      node.material = targetMaterial;
+    }
   });
 };
 
@@ -577,6 +620,11 @@ export const create3DViewer = ({
       }
 
       scene.traverse((object: THREE.Object3D) => {
+        if (object.userData && object.userData.stateMaterials) {
+          const stateMaterials = object.userData.stateMaterials as Map<string, THREE.Material>;
+          stateMaterials.forEach(disposeMaterial);
+        }
+
         if (!(object instanceof THREE.Mesh)) {
           return;
         }
