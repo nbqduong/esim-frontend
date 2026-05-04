@@ -5,7 +5,33 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   base: '/demoui/',
   envDir: '../',
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'wasm-mime-fix',
+      configureServer(server: import('vite').ViteDevServer) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url?.includes('/wasm/') && req.url.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript')
+          }
+          next()
+        })
+      },
+    },
+  ],
+  server: {
+    host: '0.0.0.0',
+    proxy: {
+      '/auth': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
