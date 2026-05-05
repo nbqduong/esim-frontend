@@ -1,0 +1,15 @@
+<svg width="151.1811" height="75.59055" viewBox="0 0 151.1811 75.59055">
+  <line x1="0" y1="37.795277" x2="43.464565" y2="37.795277" stroke="white" stroke-width="7.559055" />
+  <line x1="107.71654" y1="37.795277" x2="151.1811" y2="37.795277" stroke="white" stroke-width="7.559055" />
+  <circle cx="43.464565" cy="37.795277" r="4.535433" fill="white" />
+  <circle cx="107.71654" cy="37.795277" r="4.535433" fill="white" />
+  <line
+    x1="48.377953"
+    y1="29.480316"
+    x2="102.04724"
+    y2="12.850394"
+    stroke="white"
+    stroke-width="7.559055"
+    stroke-linecap="round"
+  />
+</svg>

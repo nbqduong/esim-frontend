@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { catalogManager } from "@/features/static-models/catalogManager";
+import { resolveStaticAssetUrl } from "@/features/static-models/resolveStaticAssetUrl";
 
 export interface LoadModelOptions {
   modelUrl: string;
@@ -50,20 +51,7 @@ const prepareModelNode = (
   }
 };
 
-export const resolveModelUrl = (url: string): string => {
-  const baseUrl = import.meta.env.VITE_SYSTEM_STATIC_ASSETS_GCS_BUCKET_NAME;
-  if (!baseUrl) {
-    return url;
-  }
-  
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-    return url;
-  }
-
-  const cleanBase = baseUrl.replace(/\/+$/, "");
-  const cleanUrl = url.replace(/^\/+/, "");
-  return `${cleanBase}/${cleanUrl}`;
-};
+export const resolveModelUrl = (url: string): string => resolveStaticAssetUrl(url);
 
 export const loadModel = ({
   modelUrl,

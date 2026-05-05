@@ -1,0 +1,29 @@
+<svg
+  width="64"
+  height="28"
+  viewBox="0 0 64 28"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <path
+    d="M2 14H17M47 14H62"
+    stroke="#57606A"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+  <circle
+    cx="32"
+    cy="14"
+    r="10"
+    fill="#D1242F"
+    fill-opacity="0.08"
+    stroke="#57606A"
+    stroke-width="2"
+  />
+  <path
+    d="M25 7L39 21M39 7L25 21"
+    stroke="#D1242F"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+</svg>

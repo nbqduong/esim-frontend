@@ -1,5 +1,5 @@
 import { fetchPublicStaticAssets, type StaticAsset } from "./api";
-import { resolveModelUrl } from "@/features/project-create/three/loadModel";
+import { resolveStaticAssetUrl } from "@/features/static-models/resolveStaticAssetUrl";
 
 export class CatalogManager {
   private staticAssets: StaticAsset[] = [];
@@ -35,7 +35,7 @@ export class CatalogManager {
     
     // 2. If it exists in the public assets, resolve to the full CDN path
     if (asset) {
-      return resolveModelUrl(asset.url);
+      return resolveStaticAssetUrl(asset.url);
     }
 
     // If not found in the backend public assets, return null as per requirement
